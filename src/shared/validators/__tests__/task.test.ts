@@ -49,6 +49,17 @@ export function validateScheduledDate(date: string): { valid: boolean; error?: s
     return { valid: false, error: '有効な日付を入力してください' };
   }
   
+  // 日付が自動的に繰り越されていないかチェック
+  // 例: 2023-02-29 は 2023-03-01 に変換されてしまうため、これを検出する
+  const [year, month, day] = date.split('-').map(Number);
+  if (
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() + 1 !== month ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    return { valid: false, error: '有効な日付を入力してください' };
+  }
+  
   return { valid: true };
 }
 
