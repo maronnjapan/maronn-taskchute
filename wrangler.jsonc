@@ -9,5 +9,22 @@
   },
   "vars": {
     "ENVIRONMENT": "production"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "taskchute-db",
+      "database_id": "placeholder-database-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVE",
+      "bucket_name": "taskchute-archive"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 3 * * *"]
   }
 }

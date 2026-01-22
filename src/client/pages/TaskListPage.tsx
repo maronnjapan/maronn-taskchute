@@ -1,124 +1,283 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { Task } from '../../shared/types/api';
-import { client } from '../services/api-client';
+import { useCallback, useMemo } from 'react';
+import { useAuth } from '../hooks/use-auth';
+import { useWorkspaces } from '../hooks/use-workspaces';
+import { useTasks, usePendingTasks } from '../hooks/use-tasks';
+import { useWorkspaceStore } from '../stores/workspace-store';
+import { useTaskStore } from '../stores/task-store';
+import { useUiStore } from '../stores/ui-store';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import {
+  SortableTaskList,
+  TaskForm,
+  DateNavigator,
+  WorkspaceSelector,
+  WorkspaceForm,
+  CarryOverDialog,
+  TimeSummary,
+  ShareLinkDisplay,
+} from '../components/features';
+import type { Task } from '../../shared/types/index';
+import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
 
 export function TaskListPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated, isLoading: isAuthLoading, login } = useAuth();
+  const { workspaces, create: createWorkspace, isCreating: isCreatingWorkspace } = useWorkspaces();
+  const { currentWorkspaceId, setCurrentWorkspaceId } = useWorkspaceStore();
+  const { selectedDate } = useTaskStore();
+  const {
+    isTaskFormOpen,
+    isWorkspaceFormOpen,
+    isCarryOverDialogOpen,
+    editingTaskId,
+    setWorkspaceFormOpen,
+    setCarryOverDialogOpen,
+    openTaskForm,
+    closeTaskForm,
+  } = useUiStore();
 
-  const fetchTasks = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Hono RPCクライアントを使用
-      const response = await client.tasks.$get();
-
-      if (!response.ok) {
-        throw new Error('タスクの取得に失敗しました');
-      }
-
-      const data = await response.json();
-      setTasks(data.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '不明なエラーが発生しました');
-    } finally {
-      setLoading(false);
+  // Auto-select first workspace if none selected
+  const activeWorkspaceId = useMemo(() => {
+    if (currentWorkspaceId && workspaces.some((w) => w.id === currentWorkspaceId)) {
+      return currentWorkspaceId;
     }
-  };
+    if (workspaces.length > 0) {
+      setCurrentWorkspaceId(workspaces[0].id);
+      return workspaces[0].id;
+    }
+    return null;
+  }, [currentWorkspaceId, workspaces, setCurrentWorkspaceId]);
 
-  const getStatusLabel = (status: Task['status']) => {
-    const labels = {
-      pending: '未着手',
-      in_progress: '進行中',
-      completed: '完了',
-      carried_over: '繰越',
-    };
-    return labels[status];
-  };
+  const currentWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId),
+    [workspaces, activeWorkspaceId]
+  );
 
-  const getStatusColor = (status: Task['status']) => {
-    const colors = {
-      pending: 'bg-gray-100 text-gray-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      carried_over: 'bg-yellow-100 text-yellow-800',
-    };
-    return colors[status];
-  };
+  const {
+    tasks,
+    isLoading: isTasksLoading,
+    create: createTask,
+    update: updateTask,
+    delete: deleteTask,
+    reorder,
+    carryOver,
+    isCreating,
+    isUpdating,
+    isCarryingOver,
+  } = useTasks(activeWorkspaceId ?? '', { date: selectedDate });
+
+  const { data: pendingTasks = [] } = usePendingTasks(activeWorkspaceId ?? '');
+
+  // Get the task being edited
+  const editingTask = useMemo(
+    () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
+    [editingTaskId, tasks]
+  );
+
+  // Handlers
+  const handleCreateWorkspace = useCallback(
+    (data: { name: string }) => {
+      createWorkspace(data, {
+        onSuccess: (workspace) => {
+          setCurrentWorkspaceId(workspace.id);
+          setWorkspaceFormOpen(false);
+        },
+      });
+    },
+    [createWorkspace, setCurrentWorkspaceId, setWorkspaceFormOpen]
+  );
+
+  const handleCreateTask = useCallback(
+    (data: CreateTaskInput | UpdateTaskInput) => {
+      if (editingTaskId) {
+        updateTask(
+          { taskId: editingTaskId, input: data as UpdateTaskInput },
+          { onSuccess: () => closeTaskForm() }
+        );
+      } else {
+        createTask(data as CreateTaskInput, { onSuccess: () => closeTaskForm() });
+      }
+    },
+    [editingTaskId, createTask, updateTask, closeTaskForm]
+  );
+
+  const handleEditTask = useCallback(
+    (task: Task) => {
+      openTaskForm(task.id);
+    },
+    [openTaskForm]
+  );
+
+  const handleDeleteTask = useCallback(
+    (taskId: string) => {
+      if (confirm('このタスクを削除しますか？')) {
+        deleteTask(taskId);
+      }
+    },
+    [deleteTask]
+  );
+
+  const handleStatusChange = useCallback(
+    (taskId: string, status: Task['status']) => {
+      updateTask({ taskId, input: { status } });
+    },
+    [updateTask]
+  );
+
+  const handleCarryOver = useCallback(
+    (taskIds: string[], targetDate: string) => {
+      carryOver(
+        { taskIds, targetDate },
+        { onSuccess: () => setCarryOverDialogOpen(false) }
+      );
+    },
+    [carryOver, setCarryOverDialogOpen]
+  );
+
+  // Loading state
+  if (isAuthLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  // Not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <h1 className="text-3xl font-bold text-gray-900 mb-4">TaskChute へようこそ</h1>
+        <p className="text-gray-600 mb-8">
+          タスクシュート方式の時間記録・管理ができるWebアプリケーションです。
+          <br />
+          ログインして始めましょう。
+        </p>
+        <Button size="lg" onClick={login}>
+          ログインして始める
+        </Button>
+      </div>
+    );
+  }
+
+  // No workspace
+  if (workspaces.length === 0 && !isWorkspaceFormOpen) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">ワークスペースを作成</h1>
+        <p className="text-gray-600 mb-8">
+          最初のワークスペースを作成して、タスク管理を始めましょう。
+        </p>
+        <Button onClick={() => setWorkspaceFormOpen(true)}>
+          ワークスペースを作成
+        </Button>
+
+        <Dialog
+          isOpen={isWorkspaceFormOpen}
+          onClose={() => setWorkspaceFormOpen(false)}
+          title="新規ワークスペース"
+        >
+          <WorkspaceForm
+            onSubmit={handleCreateWorkspace}
+            onCancel={() => setWorkspaceFormOpen(false)}
+            isSubmitting={isCreatingWorkspace}
+          />
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
-      <nav className="mb-6 pb-4 border-b">
-        <div className="flex gap-4">
-          <Link to="/" className="text-gray-600 hover:text-blue-600">
-            ホーム
-          </Link>
-          <Link to="/tasks" className="text-blue-600 font-semibold">
-            タスク一覧
-          </Link>
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Header with workspace selector and date navigator */}
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="w-64">
+            <WorkspaceSelector
+              workspaces={workspaces}
+              onCreateNew={() => setWorkspaceFormOpen(true)}
+            />
+          </div>
+          <DateNavigator />
         </div>
-      </nav>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button onClick={() => openTaskForm()}>新規タスク</Button>
+            {pendingTasks.length > 0 && (
+              <Button variant="secondary" onClick={() => setCarryOverDialogOpen(true)}>
+                繰り越し ({pendingTasks.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Time summary */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">タスク一覧</h1>
-        <p className="text-gray-600">タスク管理アプリケーション（Hono RPC使用）</p>
+        <TimeSummary tasks={tasks} />
       </div>
 
-      <div className="mb-4">
-        <button
-          onClick={fetchTasks}
-          disabled={loading}
-          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? '読み込み中...' : 'タスクを取得'}
-        </button>
-      </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      {tasks.length > 0 ? (
-        <div className="space-y-4">
-          {tasks.map((task) => (
-            <Link
-              key={task.id}
-              to={`/tasks/${task.id}`}
-              className="block bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <h3 className="text-lg font-semibold">{task.title}</h3>
-                <span
-                  className={`px-2 py-1 text-xs font-medium rounded ${getStatusColor(task.status)}`}
-                >
-                  {getStatusLabel(task.status)}
-                </span>
-              </div>
-              {task.description && (
-                <p className="text-gray-600 text-sm mb-3">{task.description}</p>
-              )}
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span>📅 {task.scheduledDate}</span>
-                {task.estimatedMinutes && (
-                  <span>⏱️ 見積: {task.estimatedMinutes}分</span>
-                )}
-                {task.actualMinutes && (
-                  <span>✅ 実績: {task.actualMinutes}分</span>
-                )}
-              </div>
-            </Link>
-          ))}
+      {/* Task list */}
+      {isTasksLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
       ) : (
-        !loading && (
-          <div className="text-center py-8 text-gray-500">
-            <p>「タスクを取得」ボタンをクリックしてタスクを表示してください</p>
-          </div>
-        )
+        <SortableTaskList
+          tasks={tasks}
+          onEditTask={handleEditTask}
+          onDeleteTask={handleDeleteTask}
+          onStatusChange={handleStatusChange}
+          onReorder={(taskIds) => reorder({ taskIds })}
+          emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
+        />
       )}
+
+      {/* Share link */}
+      {currentWorkspace && (
+        <div className="mt-8">
+          <ShareLinkDisplay workspace={currentWorkspace} />
+        </div>
+      )}
+
+      {/* Task form dialog */}
+      <Dialog
+        isOpen={isTaskFormOpen}
+        onClose={closeTaskForm}
+        title={editingTask ? 'タスクを編集' : '新規タスク'}
+      >
+        <TaskForm
+          task={editingTask}
+          onSubmit={handleCreateTask}
+          onCancel={closeTaskForm}
+          isSubmitting={isCreating || isUpdating}
+          defaultDate={selectedDate}
+        />
+      </Dialog>
+
+      {/* Workspace form dialog */}
+      <Dialog
+        isOpen={isWorkspaceFormOpen}
+        onClose={() => setWorkspaceFormOpen(false)}
+        title="新規ワークスペース"
+      >
+        <WorkspaceForm
+          onSubmit={handleCreateWorkspace}
+          onCancel={() => setWorkspaceFormOpen(false)}
+          isSubmitting={isCreatingWorkspace}
+        />
+      </Dialog>
+
+      {/* Carry over dialog */}
+      <CarryOverDialog
+        isOpen={isCarryOverDialogOpen}
+        onClose={() => setCarryOverDialogOpen(false)}
+        pendingTasks={pendingTasks}
+        onCarryOver={handleCarryOver}
+        isLoading={isCarryingOver}
+      />
     </div>
   );
 }

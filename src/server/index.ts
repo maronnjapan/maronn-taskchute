@@ -1,110 +1,69 @@
 import { Hono } from 'hono';
-import type { Task } from '../shared/types/api';
+import { createAuthMiddleware } from './middleware/auth';
+import { errorHandler } from './middleware/error-handler';
+import auth from './routes/auth';
+import workspaces from './routes/workspaces';
+import share from './routes/share';
+import comments from './routes/comments';
+import type { User } from '../shared/types/index';
 
 interface Bindings {
+  DB: D1Database;
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
+  ARCHIVE: R2Bucket;
   ENVIRONMENT?: string;
+  AUTH0_DOMAIN: string;
+  AUTH0_CLIENT_ID: string;
+  AUTH0_CLIENT_SECRET: string;
+  AUTH0_CALLBACK_URL: string;
 }
 
-const app = new Hono<{ Bindings: Bindings }>();
+interface Variables {
+  user: User | null;
+  userId: string | null;
+}
 
-// APIルート
-const api = new Hono<{ Bindings: Bindings }>()
-  .get('/', (c) => {
-    return c.json({ message: 'Hello from Hono API!' });
-  })
-  .get('/tasks', (c) => {
-    const tasks: Task[] = [
-      {
-        id: '1',
-        title: 'プロジェクト設計書を作成',
-        description: 'TaskChute Webアプリの設計書を作成する',
-        scheduledDate: '2026-01-22',
-        status: 'in_progress',
-        estimatedMinutes: 120,
-        actualMinutes: 60,
-      },
-      {
-        id: '2',
-        title: 'データベーススキーマ設計',
-        description: 'D1データベースのテーブル設計を行う',
-        scheduledDate: '2026-01-22',
-        status: 'pending',
-        estimatedMinutes: 90,
-        actualMinutes: null,
-      },
-      {
-        id: '3',
-        title: 'API実装',
-        description: 'Honoでタスク管理APIを実装する',
-        scheduledDate: '2026-01-22',
-        status: 'completed',
-        estimatedMinutes: 180,
-        actualMinutes: 200,
-      },
-    ];
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-    return c.json({ data: tasks });
-  })
-  // 動的ルーティング: /api/tasks/:id
-  .get('/tasks/:id', (c) => {
-    const id = c.req.param('id');
-    
-    const tasks: Task[] = [
-      {
-        id: '1',
-        title: 'プロジェクト設計書を作成',
-        description: 'TaskChute Webアプリの設計書を作成する',
-        scheduledDate: '2026-01-22',
-        status: 'in_progress',
-        estimatedMinutes: 120,
-        actualMinutes: 60,
-      },
-      {
-        id: '2',
-        title: 'データベーススキーマ設計',
-        description: 'D1データベースのテーブル設計を行う',
-        scheduledDate: '2026-01-22',
-        status: 'pending',
-        estimatedMinutes: 90,
-        actualMinutes: null,
-      },
-      {
-        id: '3',
-        title: 'API実装',
-        description: 'Honoでタスク管理APIを実装する',
-        scheduledDate: '2026-01-22',
-        status: 'completed',
-        estimatedMinutes: 180,
-        actualMinutes: 200,
-      },
-    ];
+// Global middleware
+app.use('*', errorHandler());
 
-    const task = tasks.find(t => t.id === id);
-    
-    if (!task) {
-      return c.json({ error: { code: 'NOT_FOUND', message: 'タスクが見つかりません' } }, 404);
-    }
-    
-    return c.json({ data: task });
-  });
+// Auth middleware for all routes (sets user context)
+app.use('*', async (c, next) => {
+  if (c.env.DB) {
+    const authMiddleware = createAuthMiddleware(c.env.DB);
+    return authMiddleware(c, next);
+  }
+  // If DB is not available, set null user
+  c.set('user', null);
+  c.set('userId', null);
+  await next();
+});
 
-// APIをマウント
-app.route('/api', api);
+// Health check endpoint
+app.get('/api/health', (c) => {
+  return c.json({ status: 'ok', timestamp: Date.now() });
+});
 
-// 静的アセット配信とSPAフォールバック
+// Mount routes
+app.route('/auth', auth);
+app.route('/api/workspaces', workspaces);
+app.route('/api/s', share);
+app.route('/api', comments);
+
+// Static asset serving and SPA fallback
 app.get('*', async (c) => {
   const url = new URL(c.req.url);
   const pathname = url.pathname;
 
-  // ルートパスまたは拡張子がないパス（SPAルート）は index.html を返す
-  if (pathname === '/' || (!pathname.includes('.') && !pathname.startsWith('/api'))) {
+  // Root path or paths without extension (SPA routes) return index.html
+  if (pathname === '/' || (!pathname.includes('.') && !pathname.startsWith('/api') && !pathname.startsWith('/auth'))) {
     const indexRequest = new Request(new URL('/index.html', url.origin));
     const indexResponse = await c.env.ASSETS.fetch(indexRequest);
-    
-    // 新しいHeadersオブジェクトを作成（locationを除外）
+
+    // Create new Headers object (exclude location header)
     const newHeaders = new Headers();
     for (const [key, value] of indexResponse.headers.entries()) {
       if (key.toLowerCase() !== 'location') {
@@ -112,24 +71,24 @@ app.get('*', async (c) => {
       }
     }
     newHeaders.set('Content-Type', 'text/html; charset=utf-8');
-    
+
     return new Response(indexResponse.body, {
       status: 200,
       headers: newHeaders,
     });
   }
 
-  // 静的アセット（JS, CSS, 画像など）を配信
+  // Serve static assets (JS, CSS, images, etc.)
   const assetRequest = new Request(new URL(pathname, url.origin));
 
   try {
     const response = await c.env.ASSETS.fetch(assetRequest);
-    
-    // 404の場合は index.html を返す（SPA フォールバック）
+
+    // Return index.html for 404 (SPA fallback)
     if (response.status === 404) {
       const indexRequest = new Request(new URL('/index.html', url.origin));
       const indexResponse = await c.env.ASSETS.fetch(indexRequest);
-      
+
       const newHeaders = new Headers();
       for (const [key, value] of indexResponse.headers.entries()) {
         if (key.toLowerCase() !== 'location') {
@@ -137,20 +96,20 @@ app.get('*', async (c) => {
         }
       }
       newHeaders.set('Content-Type', 'text/html; charset=utf-8');
-      
+
       return new Response(indexResponse.body, {
         status: 200,
         headers: newHeaders,
       });
     }
-    
+
     return response;
   } catch (error) {
     console.error('Asset fetch error:', error);
-    // エラー時も index.html を返す
+    // Return index.html on error
     const indexRequest = new Request(new URL('/index.html', url.origin));
     const indexResponse = await c.env.ASSETS.fetch(indexRequest);
-    
+
     const newHeaders = new Headers();
     for (const [key, value] of indexResponse.headers.entries()) {
       if (key.toLowerCase() !== 'location') {
@@ -158,7 +117,7 @@ app.get('*', async (c) => {
       }
     }
     newHeaders.set('Content-Type', 'text/html; charset=utf-8');
-    
+
     return new Response(indexResponse.body, {
       status: 200,
       headers: newHeaders,
@@ -166,8 +125,7 @@ app.get('*', async (c) => {
   }
 });
 
-// RPC用に型をエクスポート
-export type AppType = typeof api;
+// Export types for RPC
+export type AppType = typeof app;
 
 export default app;
-

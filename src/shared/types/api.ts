@@ -1,18 +1,45 @@
-export interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  scheduledDate: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'carried_over';
-  estimatedMinutes?: number;
-  actualMinutes?: number | null;
-}
+// Re-export all types from the main types file
+export type {
+  User,
+  Workspace,
+  TaskStatus,
+  Task,
+  TaskComment,
+  Session,
+  ApiResponse,
+  ApiError,
+  AuthUser,
+} from './index';
 
-export interface ApiResponse<T> {
-  data: T;
-  meta?: {
-    total?: number;
-    page?: number;
-    hasMore?: boolean;
-  };
-}
+// Re-export input types from validators (these are inferred from zod schemas)
+export type {
+  CreateTaskInput,
+  UpdateTaskInput,
+  ReorderTasksInput,
+  CarryOverTasksInput,
+  CreateWorkspaceInput,
+  UpdateWorkspaceInput,
+  CreateTaskCommentInput,
+  UpdateTaskCommentInput,
+  TaskQueryParams,
+} from '../validators/index';
+
+// Re-export schemas for validation
+export {
+  createTaskSchema,
+  updateTaskSchema,
+  reorderTasksSchema,
+  carryOverTasksSchema,
+  createWorkspaceSchema,
+  updateWorkspaceSchema,
+  createTaskCommentSchema,
+  updateTaskCommentSchema,
+  taskQuerySchema,
+  taskStatusSchema,
+} from '../validators/index';
+
+// Re-export utils
+export * from '../utils/index';
+
+// Re-export constants
+export * from '../constants/index';

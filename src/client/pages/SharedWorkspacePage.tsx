@@ -1,0 +1,178 @@
+import { useCallback, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useWorkspaceByShareToken, useTasksByShareToken } from '../hooks';
+import { useTaskStore } from '../stores/task-store';
+import { taskApi } from '../services/api-client';
+import { Button } from '../components/ui/Button';
+import { Dialog } from '../components/ui/Dialog';
+import { SortableTaskList, TaskForm, DateNavigator, TimeSummary } from '../components/features';
+import type { Task } from '../../shared/types/index';
+import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
+
+export function SharedWorkspacePage() {
+  const { shareToken } = useParams<{ shareToken: string }>();
+  const { selectedDate } = useTaskStore();
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    data: workspace,
+    isLoading: isWorkspaceLoading,
+    error: workspaceError,
+  } = useWorkspaceByShareToken(shareToken ?? '');
+
+  const {
+    data: tasks = [],
+    isLoading: isTasksLoading,
+    refetch: refetchTasks,
+  } = useTasksByShareToken(shareToken ?? '', { date: selectedDate });
+
+  const editingTask = useMemo(
+    () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
+    [editingTaskId, tasks]
+  );
+
+  const openTaskForm = useCallback((taskId?: string) => {
+    setEditingTaskId(taskId ?? null);
+    setIsTaskFormOpen(true);
+  }, []);
+
+  const closeTaskForm = useCallback(() => {
+    setIsTaskFormOpen(false);
+    setEditingTaskId(null);
+  }, []);
+
+  const handleCreateTask = useCallback(
+    async (data: CreateTaskInput | UpdateTaskInput) => {
+      if (!workspace) return;
+
+      setIsSubmitting(true);
+      try {
+        if (editingTaskId) {
+          await taskApi.update(workspace.id, editingTaskId, data as UpdateTaskInput);
+        } else {
+          await taskApi.create(workspace.id, data as CreateTaskInput);
+        }
+        closeTaskForm();
+        void refetchTasks();
+      } catch (error) {
+        console.error('Failed to save task:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [workspace, editingTaskId, closeTaskForm, refetchTasks]
+  );
+
+  const handleEditTask = useCallback((task: Task) => {
+    openTaskForm(task.id);
+  }, [openTaskForm]);
+
+  const handleDeleteTask = useCallback(
+    async (taskId: string) => {
+      if (!workspace) return;
+      if (!confirm('このタスクを削除しますか？')) return;
+
+      try {
+        await taskApi.delete(workspace.id, taskId);
+        void refetchTasks();
+      } catch (error) {
+        console.error('Failed to delete task:', error);
+      }
+    },
+    [workspace, refetchTasks]
+  );
+
+  const handleStatusChange = useCallback(
+    async (taskId: string, status: Task['status']) => {
+      if (!workspace) return;
+
+      try {
+        await taskApi.update(workspace.id, taskId, { status });
+        void refetchTasks();
+      } catch (error) {
+        console.error('Failed to update task status:', error);
+      }
+    },
+    [workspace, refetchTasks]
+  );
+
+  // Loading state
+  if (isWorkspaceLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (workspaceError || !workspace) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          ワークスペースが見つかりません
+        </h1>
+        <p className="text-gray-600">
+          共有リンクが無効か、ワークスペースが削除された可能性があります。
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">{workspace.name}</h1>
+            <p className="text-sm text-gray-500">共有ワークスペース</p>
+          </div>
+          <DateNavigator />
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between">
+          <Button onClick={() => openTaskForm()}>新規タスク</Button>
+        </div>
+      </div>
+
+      {/* Time summary */}
+      <div className="mb-6">
+        <TimeSummary tasks={tasks} />
+      </div>
+
+      {/* Task list */}
+      {isTasksLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : (
+        <SortableTaskList
+          tasks={tasks}
+          onEditTask={handleEditTask}
+          onDeleteTask={handleDeleteTask}
+          onStatusChange={handleStatusChange}
+          emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
+        />
+      )}
+
+      {/* Task form dialog */}
+      <Dialog
+        isOpen={isTaskFormOpen}
+        onClose={closeTaskForm}
+        title={editingTask ? 'タスクを編集' : '新規タスク'}
+      >
+        <TaskForm
+          task={editingTask}
+          onSubmit={handleCreateTask}
+          onCancel={closeTaskForm}
+          isSubmitting={isSubmitting}
+          defaultDate={selectedDate}
+        />
+      </Dialog>
+    </div>
+  );
+}

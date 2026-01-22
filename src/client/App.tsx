@@ -1,16 +1,21 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { TaskListPage } from './pages/TaskListPage';
-import { TaskDetailPage } from './pages/TaskDetailPage';
-import { HomePage } from './pages/HomePage';
+import { SharedWorkspacePage } from './pages/SharedWorkspacePage';
+import { Header } from './components/features/Header';
 
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/tasks" element={<TaskListPage />} />
-        <Route path="/tasks/:id" element={<TaskDetailPage />} />
-      </Routes>
+      <div className="min-h-screen bg-gray-100">
+        <Header />
+        <main>
+          <Routes>
+            <Route path="/" element={<TaskListPage />} />
+            <Route path="/tasks" element={<TaskListPage />} />
+            <Route path="/s/:shareToken" element={<SharedWorkspacePage />} />
+          </Routes>
+        </main>
+      </div>
     </BrowserRouter>
   );
 }
