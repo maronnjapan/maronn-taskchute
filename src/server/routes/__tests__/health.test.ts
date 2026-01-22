@@ -32,7 +32,7 @@ describe('Health Check API', () => {
 
   it('GET /health のタイムスタンプはISO 8601形式', async () => {
     const res = await app.request('/health');
-    const data = await res.json();
+    const data = await res.json() as { status: string; timestamp: string; version: string };
 
     const timestamp = data.timestamp;
     expect(timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);

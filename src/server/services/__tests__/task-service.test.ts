@@ -21,12 +21,12 @@ class TaskService {
   private tasks: Task[] = [];
   private idCounter = 1;
 
-  async createTask(input: {
+  createTask(input: {
     workspaceId: string;
     title: string;
     scheduledDate: string;
     estimatedMinutes?: number;
-  }): Promise<Task> {
+  }): Task {
     if (!input.title || input.title.trim().length === 0) {
       throw new Error('タイトルは必須です');
     }
@@ -47,13 +47,13 @@ class TaskService {
     return task;
   }
 
-  async getTasksByDate(workspaceId: string, scheduledDate: string): Promise<Task[]> {
+  getTasksByDate(workspaceId: string, scheduledDate: string): Task[] {
     return this.tasks
       .filter(t => t.workspaceId === workspaceId && t.scheduledDate === scheduledDate)
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
-  async updateTask(id: string, updates: Partial<Task>): Promise<Task> {
+  updateTask(id: string, updates: Partial<Task>): Task {
     const task = this.tasks.find(t => t.id === id);
     if (!task) {
       throw new Error('タスクが見つかりません');
@@ -63,7 +63,7 @@ class TaskService {
     return task;
   }
 
-  async deleteTask(id: string): Promise<void> {
+  deleteTask(id: string): void {
     const index = this.tasks.findIndex(t => t.id === id);
     if (index === -1) {
       throw new Error('タスクが見つかりません');
@@ -86,14 +86,14 @@ describe('TaskService', () => {
   });
 
   describe('createTask', () => {
-    it('タイトルと日付を指定してタスクを作成できる', async () => {
+    it('タイトルと日付を指定してタスクを作成できる', () => {
       const input = {
         workspaceId: 'workspace-1',
         title: 'テストタスク',
         scheduledDate: '2024-01-15',
       };
 
-      const result = await taskService.createTask(input);
+      const result = taskService.createTask(input);
 
       expect(result.title).toBe('テストタスク');
       expect(result.scheduledDate).toBe('2024-01-15');
@@ -102,7 +102,7 @@ describe('TaskService', () => {
       expect(result.id).toBeTruthy();
     });
 
-    it('見積もり時間を指定してタスクを作成できる', async () => {
+    it('見積もり時間を指定してタスクを作成できる', () => {
       const input = {
         workspaceId: 'workspace-1',
         title: 'タスク',
@@ -110,87 +110,87 @@ describe('TaskService', () => {
         estimatedMinutes: 60,
       };
 
-      const result = await taskService.createTask(input);
+      const result = taskService.createTask(input);
 
       expect(result.estimatedMinutes).toBe(60);
     });
 
-    it('タイトルが空の場合はエラーを返す', async () => {
+    it('タイトルが空の場合はエラーを返す', () => {
       const input = {
         workspaceId: 'workspace-1',
         title: '',
         scheduledDate: '2024-01-15',
       };
 
-      await expect(taskService.createTask(input))
-        .rejects.toThrow('タイトルは必須です');
+      expect(() => taskService.createTask(input))
+        .toThrow('タイトルは必須です');
     });
 
-    it('複数のタスクを作成すると sortOrder が自動的に割り当てられる', async () => {
-      await taskService.createTask({
+    it('複数のタスクを作成すると sortOrder が自動的に割り当てられる', () => {
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク1',
         scheduledDate: '2024-01-15',
       });
 
-      await taskService.createTask({
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク2',
         scheduledDate: '2024-01-15',
       });
 
-      const tasks = await taskService.getTasksByDate('workspace-1', '2024-01-15');
+      const tasks = taskService.getTasksByDate('workspace-1', '2024-01-15');
       expect(tasks[0].sortOrder).toBe(0);
       expect(tasks[1].sortOrder).toBe(1);
     });
   });
 
   describe('getTasksByDate', () => {
-    it('指定した日付のタスク一覧を取得できる', async () => {
-      await taskService.createTask({
+    it('指定した日付のタスク一覧を取得できる', () => {
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク1',
         scheduledDate: '2024-01-15',
       });
 
-      await taskService.createTask({
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク2',
         scheduledDate: '2024-01-15',
       });
 
-      await taskService.createTask({
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク3',
         scheduledDate: '2024-01-16',
       });
 
-      const tasks = await taskService.getTasksByDate('workspace-1', '2024-01-15');
+      const tasks = taskService.getTasksByDate('workspace-1', '2024-01-15');
 
       expect(tasks).toHaveLength(2);
       expect(tasks[0].title).toBe('タスク1');
       expect(tasks[1].title).toBe('タスク2');
     });
 
-    it('該当するタスクがない場合は空配列を返す', async () => {
-      const tasks = await taskService.getTasksByDate('workspace-1', '2024-01-15');
+    it('該当するタスクがない場合は空配列を返す', () => {
+      const tasks = taskService.getTasksByDate('workspace-1', '2024-01-15');
       expect(tasks).toEqual([]);
     });
 
-    it('タスクは sortOrder でソートされて返される', async () => {
-      await taskService.createTask({
+    it('タスクは sortOrder でソートされて返される', () => {
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスクA',
         scheduledDate: '2024-01-15',
       });
 
-      await taskService.createTask({
+      taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスクB',
         scheduledDate: '2024-01-15',
       });
 
-      const tasks = await taskService.getTasksByDate('workspace-1', '2024-01-15');
+      const tasks = taskService.getTasksByDate('workspace-1', '2024-01-15');
 
       expect(tasks[0].title).toBe('タスクA');
       expect(tasks[1].title).toBe('タスクB');
@@ -198,14 +198,14 @@ describe('TaskService', () => {
   });
 
   describe('updateTask', () => {
-    it('タスクのタイトルを更新できる', async () => {
-      const task = await taskService.createTask({
+    it('タスクのタイトルを更新できる', () => {
+      const task = taskService.createTask({
         workspaceId: 'workspace-1',
         title: '元のタイトル',
         scheduledDate: '2024-01-15',
       });
 
-      const updated = await taskService.updateTask(task.id, {
+      const updated = taskService.updateTask(task.id, {
         title: '新しいタイトル',
       });
 
@@ -213,43 +213,43 @@ describe('TaskService', () => {
       expect(updated.id).toBe(task.id);
     });
 
-    it('タスクのステータスを更新できる', async () => {
-      const task = await taskService.createTask({
+    it('タスクのステータスを更新できる', () => {
+      const task = taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク',
         scheduledDate: '2024-01-15',
       });
 
-      const updated = await taskService.updateTask(task.id, {
+      const updated = taskService.updateTask(task.id, {
         status: 'in_progress',
       });
 
       expect(updated.status).toBe('in_progress');
     });
 
-    it('存在しないタスクを更新しようとするとエラーを返す', async () => {
-      await expect(taskService.updateTask('non-existent', { title: 'test' }))
-        .rejects.toThrow('タスクが見つかりません');
+    it('存在しないタスクを更新しようとするとエラーを返す', () => {
+      expect(() => taskService.updateTask('non-existent', { title: 'test' }))
+        .toThrow('タスクが見つかりません');
     });
   });
 
   describe('deleteTask', () => {
-    it('タスクを削除できる', async () => {
-      const task = await taskService.createTask({
+    it('タスクを削除できる', () => {
+      const task = taskService.createTask({
         workspaceId: 'workspace-1',
         title: 'タスク',
         scheduledDate: '2024-01-15',
       });
 
-      await taskService.deleteTask(task.id);
+      taskService.deleteTask(task.id);
 
-      const tasks = await taskService.getTasksByDate('workspace-1', '2024-01-15');
+      const tasks = taskService.getTasksByDate('workspace-1', '2024-01-15');
       expect(tasks).toHaveLength(0);
     });
 
-    it('存在しないタスクを削除しようとするとエラーを返す', async () => {
-      await expect(taskService.deleteTask('non-existent'))
-        .rejects.toThrow('タスクが見つかりません');
+    it('存在しないタスクを削除しようとするとエラーを返す', () => {
+      expect(() => taskService.deleteTask('non-existent'))
+        .toThrow('タスクが見つかりません');
     });
   });
 });
