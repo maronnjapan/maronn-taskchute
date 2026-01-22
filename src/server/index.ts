@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import type { Task } from '../shared/types/api';
 
-type Bindings = {
+interface Bindings {
   ASSETS: {
     fetch: (request: Request) => Promise<Response>;
   };
   ENVIRONMENT?: string;
-};
+}
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -97,7 +97,7 @@ app.route('/api', api);
 // 静的アセット配信とSPAフォールバック
 app.get('*', async (c) => {
   const url = new URL(c.req.url);
-  let pathname = url.pathname;
+  const pathname = url.pathname;
 
   // ルートパスまたは拡張子がないパス（SPAルート）は index.html を返す
   if (pathname === '/' || (!pathname.includes('.') && !pathname.startsWith('/api'))) {
