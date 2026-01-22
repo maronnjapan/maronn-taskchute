@@ -8,13 +8,29 @@ export default tseslint.config(
   // Ignore patterns
   {
     ignores: [
+      // Build outputs
       'dist/**',
+      '.wrangler/**',
+
+      // Dependencies
       'node_modules/**',
+
+      // Test coverage
+      'coverage/**',
+      '.nyc_output/**',
+
+      // Environment files
+      '.env',
+      '.dev.vars',
+
+      // Generated files
+      'wrangler.toml',
       '*.config.js',
       '*.config.ts',
-      'wrangler.toml',
-      'coverage/**',
+
+      // Reports
       'playwright-report/**',
+      'test-results/**',
     ],
   },
 
