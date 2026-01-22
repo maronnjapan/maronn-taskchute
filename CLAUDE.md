@@ -738,11 +738,79 @@ app.route('/auth', auth);
 app.use('/assets/*', serveStatic({ root: './' }));
 app.use('/favicon.ico', serveStatic({ path: './favicon.ico' }));
 
-// SPA フォールバック（その他すべてのパスは index.html を返す）
-// これにより React Router がクライアントサイドでルーティングを処理できる
 app.get('*', async (c) => {
-  return c.env.ASSETS.fetch(new Request(new URL('/index.html', c.req.url)));
+  const url = new URL(c.req.url);
+  const pathname = url.pathname;
+
+  // ルートパスまたは拡張子がないパス（SPAルート）は index.html を返す
+  if (pathname === '/' || (!pathname.includes('.') && !pathname.startsWith('/api'))) {
+    const indexRequest = new Request(new URL('/index.html', url.origin));
+    const indexResponse = await c.env.ASSETS.fetch(indexRequest);
+    
+    // 新しいHeadersオブジェクトを作成（locationを除外）
+    const newHeaders = new Headers();
+    for (const [key, value] of indexResponse.headers.entries()) {
+      if (key.toLowerCase() !== 'location') {
+        newHeaders.set(key, value);
+      }
+    }
+    newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+    
+    return new Response(indexResponse.body, {
+      status: 200,
+      headers: newHeaders,
+    });
+  }
+
+  // 静的アセット（JS, CSS, 画像など）を配信
+  const assetRequest = new Request(new URL(pathname, url.origin));
+
+  try {
+    const response = await c.env.ASSETS.fetch(assetRequest);
+    
+    // 404の場合は index.html を返す（SPA フォールバック）
+    if (response.status === 404) {
+      const indexRequest = new Request(new URL('/index.html', url.origin));
+      const indexResponse = await c.env.ASSETS.fetch(indexRequest);
+      
+      const newHeaders = new Headers();
+      for (const [key, value] of indexResponse.headers.entries()) {
+        if (key.toLowerCase() !== 'location') {
+          newHeaders.set(key, value);
+        }
+      }
+      newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+      
+      return new Response(indexResponse.body, {
+        status: 200,
+        headers: newHeaders,
+      });
+    }
+    
+    return response;
+  } catch (error) {
+    console.error('Asset fetch error:', error);
+    // エラー時も index.html を返す
+    const indexRequest = new Request(new URL('/index.html', url.origin));
+    const indexResponse = await c.env.ASSETS.fetch(indexRequest);
+    
+    const newHeaders = new Headers();
+    for (const [key, value] of indexResponse.headers.entries()) {
+      if (key.toLowerCase() !== 'location') {
+        newHeaders.set(key, value);
+      }
+    }
+    newHeaders.set('Content-Type', 'text/html; charset=utf-8');
+    
+    return new Response(indexResponse.body, {
+      status: 200,
+      headers: newHeaders,
+    });
+  }
 });
+
+// RPC用に型をエクスポート
+export type AppType = typeof api;
 
 export default app;
 ```
