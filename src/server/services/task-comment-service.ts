@@ -1,5 +1,5 @@
-import { TaskCommentRepository } from '../repositories/task-comment-repository';
-import { TaskRepository } from '../repositories/task-repository';
+import type { TaskCommentRepository } from '../repositories/task-comment-repository';
+import type { TaskRepository } from '../repositories/task-repository';
 import type { TaskComment } from '../../shared/types/index';
 import type {
   CreateTaskCommentInput,

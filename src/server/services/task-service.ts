@@ -1,4 +1,4 @@
-import { TaskRepository } from '../repositories/task-repository';
+import type { TaskRepository } from '../repositories/task-repository';
 import type { Task, TaskStatus } from '../../shared/types/index';
 import type {
   CreateTaskInput,

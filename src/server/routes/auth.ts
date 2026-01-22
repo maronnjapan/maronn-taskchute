@@ -3,19 +3,20 @@ import { AuthService } from '../services/auth-service';
 import { UserRepository } from '../repositories/user-repository';
 import { SessionRepository } from '../repositories/session-repository';
 import { generateId } from '../../shared/utils/index';
+import type { User } from '../../shared/types/index';
 
-type Bindings = {
+interface Bindings {
   DB: D1Database;
   AUTH0_DOMAIN: string;
   AUTH0_CLIENT_ID: string;
   AUTH0_CLIENT_SECRET: string;
   AUTH0_CALLBACK_URL: string;
-};
+}
 
-type Variables = {
-  user: import('../../shared/types/index').User | null;
+interface Variables {
+  user: User | null;
   userId: string | null;
-};
+}
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

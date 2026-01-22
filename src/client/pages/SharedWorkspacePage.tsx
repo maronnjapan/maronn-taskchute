@@ -20,13 +20,13 @@ export function SharedWorkspacePage() {
     data: workspace,
     isLoading: isWorkspaceLoading,
     error: workspaceError,
-  } = useWorkspaceByShareToken(shareToken || '');
+  } = useWorkspaceByShareToken(shareToken ?? '');
 
   const {
     data: tasks = [],
     isLoading: isTasksLoading,
     refetch: refetchTasks,
-  } = useTasksByShareToken(shareToken || '', { date: selectedDate });
+  } = useTasksByShareToken(shareToken ?? '', { date: selectedDate });
 
   const editingTask = useMemo(
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
@@ -55,7 +55,7 @@ export function SharedWorkspacePage() {
           await taskApi.create(workspace.id, data as CreateTaskInput);
         }
         closeTaskForm();
-        refetchTasks();
+        void refetchTasks();
       } catch (error) {
         console.error('Failed to save task:', error);
       } finally {
@@ -76,7 +76,7 @@ export function SharedWorkspacePage() {
 
       try {
         await taskApi.delete(workspace.id, taskId);
-        refetchTasks();
+        void refetchTasks();
       } catch (error) {
         console.error('Failed to delete task:', error);
       }
@@ -90,7 +90,7 @@ export function SharedWorkspacePage() {
 
       try {
         await taskApi.update(workspace.id, taskId, { status });
-        refetchTasks();
+        void refetchTasks();
       } catch (error) {
         console.error('Failed to update task status:', error);
       }

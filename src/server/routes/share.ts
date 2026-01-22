@@ -6,9 +6,9 @@ import { TaskRepository } from '../repositories/task-repository';
 import { notFoundError } from '../middleware/error-handler';
 import type { TaskStatus } from '../../shared/types/index';
 
-type Bindings = {
+interface Bindings {
   DB: D1Database;
-};
+}
 
 const share = new Hono<{ Bindings: Bindings }>();
 

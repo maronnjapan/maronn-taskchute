@@ -64,9 +64,9 @@ export function TaskListPage() {
     isCreating,
     isUpdating,
     isCarryingOver,
-  } = useTasks(activeWorkspaceId || '', { date: selectedDate });
+  } = useTasks(activeWorkspaceId ?? '', { date: selectedDate });
 
-  const { data: pendingTasks = [] } = usePendingTasks(activeWorkspaceId || '');
+  const { data: pendingTasks = [] } = usePendingTasks(activeWorkspaceId ?? '');
 
   // Get the task being edited
   const editingTask = useMemo(

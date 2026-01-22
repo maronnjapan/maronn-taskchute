@@ -30,14 +30,14 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
       setTasks(tasks);
       return tasks;
     },
-    enabled: !!workspaceId,
+    enabled: Boolean(workspaceId),
   });
 
   const createMutation = useMutation({
     mutationFn: (input: CreateTaskInput) => taskApi.create(workspaceId, input),
     onSuccess: (task) => {
       addTask(task);
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 
@@ -46,8 +46,8 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
       taskApi.update(workspaceId, taskId, input),
     onSuccess: (task) => {
       updateTask(task.id, task);
-      queryClient.invalidateQueries({ queryKey: taskKeys.detail(workspaceId, task.id) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(workspaceId, task.id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 
@@ -55,22 +55,22 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     mutationFn: (taskId: string) => taskApi.delete(workspaceId, taskId),
     onSuccess: (_, taskId) => {
       removeTask(taskId);
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 
   const reorderMutation = useMutation({
     mutationFn: (input: ReorderTasksInput) => taskApi.reorder(workspaceId, input),
-    onMutate: async (input) => {
+    onMutate: (input) => {
       // Optimistic update
       reorderTasks(input.taskIds);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
     onError: () => {
       // Revert on error by refetching
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 
@@ -78,7 +78,7 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     mutationFn: (input: CarryOverTasksInput) => taskApi.carryOver(workspaceId, input),
     onSuccess: (tasks) => {
       tasks.forEach((task) => updateTask(task.id, task));
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
   });
 
@@ -103,7 +103,7 @@ export function useTask(workspaceId: string, taskId: string) {
   return useQuery({
     queryKey: taskKeys.detail(workspaceId, taskId),
     queryFn: () => taskApi.get(workspaceId, taskId),
-    enabled: !!workspaceId && !!taskId,
+    enabled: Boolean(workspaceId) && Boolean(taskId),
   });
 }
 
@@ -111,7 +111,7 @@ export function usePendingTasks(workspaceId: string) {
   return useQuery({
     queryKey: taskKeys.pending(workspaceId),
     queryFn: () => taskApi.getPending(workspaceId),
-    enabled: !!workspaceId,
+    enabled: Boolean(workspaceId),
   });
 }
 
@@ -122,6 +122,6 @@ export function useTasksByShareToken(
   return useQuery({
     queryKey: ['shared-tasks', shareToken, options] as const,
     queryFn: () => taskApi.listByShareToken(shareToken, options),
-    enabled: !!shareToken,
+    enabled: Boolean(shareToken),
   });
 }

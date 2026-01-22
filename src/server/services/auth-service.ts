@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
-import { UserRepository } from '../repositories/user-repository';
-import { SessionRepository } from '../repositories/session-repository';
+import type { UserRepository } from '../repositories/user-repository';
+import type { SessionRepository } from '../repositories/session-repository';
 import type { User, Session, AuthUser } from '../../shared/types/index';
 import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '../../shared/constants/index';
 
@@ -118,25 +118,28 @@ export class AuthService {
     return `https://${this.config.domain}/v2/logout?${params.toString()}`;
   }
 
-  setSessionCookie(c: Context, sessionId: string): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setSessionCookie(c: Context<any, any, any>, sessionId: string): void {
     c.header(
       'Set-Cookie',
       `${SESSION_COOKIE_NAME}=${sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SECONDS}`
     );
   }
 
-  clearSessionCookie(c: Context): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clearSessionCookie(c: Context<any, any, any>): void {
     c.header(
       'Set-Cookie',
       `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`
     );
   }
 
-  getSessionIdFromCookie(c: Context): string | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getSessionIdFromCookie(c: Context<any, any, any>): string | undefined {
     const cookie = c.req.header('Cookie');
     if (!cookie) return undefined;
 
-    const match = cookie.match(new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`));
+    const match = new RegExp(`${SESSION_COOKIE_NAME}=([^;]+)`).exec(cookie);
     return match?.[1];
   }
 

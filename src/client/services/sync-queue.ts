@@ -26,7 +26,10 @@ class SyncQueue {
 
   constructor() {
     this.loadFromStorage();
-    this.onlineHandler = () => this.processQueue();
+    this.onlineHandler = () => {
+      void this.processQueue();
+    };
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     this.offlineHandler = () => {};
 
     if (typeof window !== 'undefined') {
@@ -41,7 +44,7 @@ class SyncQueue {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        this.queue = JSON.parse(stored);
+        this.queue = JSON.parse(stored) as SyncOperation[];
       }
     } catch (error) {
       console.error('Failed to load sync queue from storage:', error);
@@ -83,7 +86,7 @@ class SyncQueue {
 
     // Try to process immediately if online
     if (navigator.onLine) {
-      this.processQueue();
+      void this.processQueue();
     }
 
     return id;
@@ -202,7 +205,7 @@ class SyncQueue {
             method = 'DELETE';
             break;
           default:
-            throw new Error(`Unknown operation type: ${type}`);
+            throw new Error(`Unknown operation type: ${type as string}`);
         }
         break;
       case 'comment':
@@ -222,11 +225,11 @@ class SyncQueue {
             method = 'DELETE';
             break;
           default:
-            throw new Error(`Unknown operation type: ${type}`);
+            throw new Error(`Unknown operation type: ${type as string}`);
         }
         break;
       default:
-        throw new Error(`Unknown entity type: ${entity}`);
+        throw new Error(`Unknown entity type: ${entity as string}`);
     }
 
     const response = await fetch(url, {
@@ -238,7 +241,7 @@ class SyncQueue {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({})) as { error?: { message?: string } };
-      throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      throw new Error(errorData.error?.message ?? `HTTP ${response.status}`);
     }
   }
 

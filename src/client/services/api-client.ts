@@ -21,7 +21,7 @@ const BASE_URL = '';
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } })) as { error?: { message?: string } };
-    throw new Error(error.error?.message || `HTTP error ${response.status}`);
+    throw new Error(error.error?.message ?? `HTTP error ${response.status}`);
   }
   return response.json();
 }

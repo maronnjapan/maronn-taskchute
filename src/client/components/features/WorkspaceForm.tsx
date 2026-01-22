@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { createWorkspaceSchema } from '../../../shared/validators/index';
 import type { CreateWorkspaceInput } from '../../../shared/validators/index';
 import type { Workspace } from '../../../shared/types/index';
@@ -17,7 +17,7 @@ interface WorkspaceFormProps {
 }
 
 export function WorkspaceForm({ workspace, onSubmit, onCancel, isSubmitting = false }: WorkspaceFormProps) {
-  const isEditing = !!workspace;
+  const isEditing = Boolean(workspace);
 
   const {
     register,

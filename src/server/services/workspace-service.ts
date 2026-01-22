@@ -1,4 +1,4 @@
-import { WorkspaceRepository } from '../repositories/workspace-repository';
+import type { WorkspaceRepository } from '../repositories/workspace-repository';
 import type { Workspace } from '../../shared/types/index';
 import type { CreateWorkspaceInput, UpdateWorkspaceInput } from '../../shared/validators/index';
 

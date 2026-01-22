@@ -26,7 +26,7 @@ export function CarryOverDialog({
   const tasksByDate = useMemo(() => {
     const grouped = new Map<string, Task[]>();
     for (const task of pendingTasks) {
-      const tasks = grouped.get(task.scheduledDate) || [];
+      const tasks = grouped.get(task.scheduledDate) ?? [];
       tasks.push(task);
       grouped.set(task.scheduledDate, tasks);
     }

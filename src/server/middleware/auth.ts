@@ -4,6 +4,13 @@ import { UserRepository } from '../repositories/user-repository';
 import { SessionRepository } from '../repositories/session-repository';
 import type { User } from '../../shared/types/index';
 
+interface AuthEnv {
+  AUTH0_DOMAIN: string;
+  AUTH0_CLIENT_ID: string;
+  AUTH0_CLIENT_SECRET: string;
+  AUTH0_CALLBACK_URL: string;
+}
+
 // Extend Hono's context to include user
 declare module 'hono' {
   interface ContextVariableMap {
@@ -13,14 +20,16 @@ declare module 'hono' {
 }
 
 export function createAuthMiddleware(db: D1Database) {
-  return async (c: Context, next: Next) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return async (c: Context<any, any, any>, next: Next) => {
+    const env = c.env as AuthEnv;
     const userRepo = new UserRepository(db);
     const sessionRepo = new SessionRepository(db);
     const authService = new AuthService(userRepo, sessionRepo, {
-      domain: c.env.AUTH0_DOMAIN ?? '',
-      clientId: c.env.AUTH0_CLIENT_ID ?? '',
-      clientSecret: c.env.AUTH0_CLIENT_SECRET ?? '',
-      callbackUrl: c.env.AUTH0_CALLBACK_URL ?? '',
+      domain: env.AUTH0_DOMAIN,
+      clientId: env.AUTH0_CLIENT_ID,
+      clientSecret: env.AUTH0_CLIENT_SECRET,
+      callbackUrl: env.AUTH0_CALLBACK_URL,
     });
 
     const sessionId = authService.getSessionIdFromCookie(c);

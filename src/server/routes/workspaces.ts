@@ -16,14 +16,14 @@ import {
 } from '../../shared/validators/index';
 import type { User, TaskStatus } from '../../shared/types/index';
 
-type Bindings = {
+interface Bindings {
   DB: D1Database;
-};
+}
 
-type Variables = {
+interface Variables {
   user: User | null;
   userId: string | null;
-};
+}
 
 const workspaces = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -169,7 +169,7 @@ workspaces.get('/:id/tasks/:taskId', async (c) => {
   }
 
   const task = await taskService.getTaskById(taskId);
-  if (!task || task.workspaceId !== workspaceId) {
+  if (task?.workspaceId !== workspaceId) {
     throw notFoundError('Task not found');
   }
 

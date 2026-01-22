@@ -14,13 +14,13 @@ export function useComments(taskId: string) {
   const listQuery = useQuery({
     queryKey: commentKeys.list(taskId),
     queryFn: () => commentApi.list(taskId),
-    enabled: !!taskId,
+    enabled: Boolean(taskId),
   });
 
   const createMutation = useMutation({
     mutationFn: (input: CreateTaskCommentInput) => commentApi.create(taskId, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
+      void queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
   });
 
@@ -28,14 +28,14 @@ export function useComments(taskId: string) {
     mutationFn: ({ commentId, input }: { commentId: string; input: UpdateTaskCommentInput }) =>
       commentApi.update(commentId, input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
+      void queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (commentId: string) => commentApi.delete(commentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
+      void queryClient.invalidateQueries({ queryKey: commentKeys.list(taskId) });
     },
   });
 

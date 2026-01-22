@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { createTaskSchema } from '../../../shared/validators/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../../shared/validators/index';
 import type { Task } from '../../../shared/types/index';
@@ -21,7 +21,7 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ task, onSubmit, onCancel, isSubmitting = false, defaultDate }: TaskFormProps) {
-  const isEditing = !!task;
+  const isEditing = Boolean(task);
 
   const {
     register,
@@ -47,8 +47,8 @@ export function TaskForm({ task, onSubmit, onCancel, isSubmitting = false, defau
   const handleFormSubmit = (data: TaskFormFields) => {
     const cleanData = {
       ...data,
-      description: data.description || undefined,
-      estimatedMinutes: data.estimatedMinutes || undefined,
+      description: data.description === '' ? undefined : data.description,
+      estimatedMinutes: data.estimatedMinutes === 0 ? undefined : data.estimatedMinutes,
     };
     onSubmit(cleanData);
   };

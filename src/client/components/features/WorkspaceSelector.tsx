@@ -21,7 +21,7 @@ export function WorkspaceSelector({ workspaces, onCreateNew }: WorkspaceSelector
   return (
     <div className="relative">
       <select
-        value={currentWorkspaceId || ''}
+        value={currentWorkspaceId ?? ''}
         onChange={handleChange}
         className="
           block w-full pl-3 pr-10 py-2 text-base border-gray-300

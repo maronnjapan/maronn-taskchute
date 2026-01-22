@@ -213,7 +213,7 @@ export class TaskRepository {
     return this.findById(id);
   }
 
-  async updateSortOrders(taskOrders: Array<{ id: string; sortOrder: number }>): Promise<void> {
+  async updateSortOrders(taskOrders: { id: string; sortOrder: number }[]): Promise<void> {
     const now = nowUnix();
     const statements = taskOrders.map(({ id, sortOrder }) =>
       this.db

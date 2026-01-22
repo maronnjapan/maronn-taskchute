@@ -29,7 +29,7 @@ export function useWorkspaces() {
     mutationFn: (input: CreateWorkspaceInput) => workspaceApi.create(input),
     onSuccess: (workspace) => {
       addWorkspace(workspace);
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
     },
   });
 
@@ -38,8 +38,8 @@ export function useWorkspaces() {
       workspaceApi.update(id, input),
     onSuccess: (workspace) => {
       updateWorkspace(workspace.id, workspace);
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspace.id) });
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspace.id) });
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
     },
   });
 
@@ -47,7 +47,7 @@ export function useWorkspaces() {
     mutationFn: (id: string) => workspaceApi.delete(id),
     onSuccess: (_, id) => {
       removeWorkspace(id);
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.lists() });
     },
   });
 
@@ -55,7 +55,7 @@ export function useWorkspaces() {
     mutationFn: (id: string) => workspaceApi.regenerateToken(id),
     onSuccess: (workspace) => {
       updateWorkspace(workspace.id, workspace);
-      queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspace.id) });
+      void queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(workspace.id) });
     },
   });
 
@@ -77,7 +77,7 @@ export function useWorkspace(id: string) {
   return useQuery({
     queryKey: workspaceKeys.detail(id),
     queryFn: () => workspaceApi.get(id),
-    enabled: !!id,
+    enabled: Boolean(id),
   });
 }
 
@@ -85,6 +85,6 @@ export function useWorkspaceByShareToken(shareToken: string) {
   return useQuery({
     queryKey: workspaceKeys.byShareToken(shareToken),
     queryFn: () => workspaceApi.getByShareToken(shareToken),
-    enabled: !!shareToken,
+    enabled: Boolean(shareToken),
   });
 }

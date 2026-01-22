@@ -13,14 +13,14 @@ import {
 } from '../../shared/validators/index';
 import type { User } from '../../shared/types/index';
 
-type Bindings = {
+interface Bindings {
   DB: D1Database;
-};
+}
 
-type Variables = {
+interface Variables {
   user: User | null;
   userId: string | null;
-};
+}
 
 const comments = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

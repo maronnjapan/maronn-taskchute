@@ -39,7 +39,7 @@ export function useAuth() {
   return {
     user: meQuery.data,
     isLoading: meQuery.isLoading,
-    isAuthenticated: !!meQuery.data,
+    isAuthenticated: Boolean(meQuery.data),
     login: () => {
       window.location.href = authApi.getLoginUrl();
     },
