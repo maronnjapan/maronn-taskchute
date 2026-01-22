@@ -1134,181 +1134,24 @@ npx wrangler d1 migrations apply taskchute-db
 npx wrangler deploy
 ```
 
-## CI/CD
-
-### GitHub Actions ワークフロー
-
-プロジェクト初期セットアップ時に以下のワークフローを `.github/workflows/` に作成する。
-
-#### ディレクトリ構成
-
-```
-.github/
-└── workflows/
-    ├── ci.yml          # PR時のテスト・lint
-    └── deploy.yml      # main へのマージ時にデプロイ
-```
-
-#### ci.yml（プルリクエスト時）
-
-```yaml
-name: CI
-
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Unit & Integration tests
-        run: npm run test:ci
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Build
-        run: npm run build
-
-      - name: Run E2E tests
-        run: npm run test:e2e
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 7
-```
-
-#### deploy.yml（本番デプロイ）
-
-```yaml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-concurrency:
-  group: deploy-production
-  cancel-in-progress: false
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Run tests
-        run: npm run test:ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Apply D1 migrations
-        run: npx wrangler d1 migrations apply taskchute-db --remote
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Deploy to Cloudflare Workers
-        run: npx wrangler deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Notify deployment success
-        if: success()
-        run: echo "Deployment successful! 🚀"
-
-      - name: Notify deployment failure
-        if: failure()
-        run: echo "Deployment failed! ❌"
-```
-
-### 必要な GitHub Secrets
-
-リポジトリの Settings > Secrets and variables > Actions に以下を設定：
-
-| Secret名 | 説明 | 取得方法 |
-|---------|------|---------|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API トークン | Cloudflare Dashboard > My Profile > API Tokens |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare アカウント ID | Workers & Pages ダッシュボードの URL から取得 |
-
-#### Cloudflare API Token の権限
-
-トークン作成時に以下の権限を付与：
-
-- **Account** - Cloudflare Workers: Edit
-- **Account** - D1: Edit
-- **Account** - Workers R2 Storage: Edit
-- **Zone** - Zone: Read（カスタムドメイン使用時）
-
 ### package.json スクリプト
 
 ```json
 {
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && wrangler deploy --dry-run",
-    "typecheck": "tsc --noEmit",
+    "dev": "concurrently \"pnpm run dev:client\" \"pnpm run dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "wrangler dev",
+    "build": "vite build && pnpm run build:server",
+    "build:server": "esbuild src/server/index.ts --bundle --platform=neutral --conditions=workerd --outfile=dist/server/index.js --format=esm --minify --external:node:*",
+    "deploy": "pnpm run build && wrangler deploy",
+    "typecheck": "tsc",
+    "gen:wrangler:types": "wrangler types",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "test": "vitest",
-    "test:ci": "vitest run --coverage",
+    "test:ci": "vitest run",
+    "test:coverage": "vitest run --coverage"
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   }
@@ -1376,10 +1219,7 @@ GitHub リポジトリの Settings > Branches で `main` ブランチに以下�
 
 ### Phase 1: MVP（必須機能）
 1. プロジェクト初期セットアップ
-   - Vite + React + Hono プロジェクト構築
-   - ESLint / Prettier / TypeScript 設定
    - Vitest / Playwright 設定
-   - GitHub Actions CI/CD 設定（ci.yml, deploy.yml）
    - GitHub ブランチ保護ルール設定
    - Cloudflare D1 / R2 / Workers 初期設定
 2. Auth0認証フロー
@@ -1388,10 +1228,10 @@ GitHub リポジトリの Settings > Branches で `main` ブランチに以下�
 5. 時間記録（見積もり・実績）
 6. オフライン対応（SyncQueue）
 7. 共有リンク機能
+8. ドラッグ&ドロップ並び替え
+9. タスク繰り越し機能
 
 ### Phase 2: あると良い機能
-1. ドラッグ&ドロップ並び替え
-2. タスク繰り越し機能
 3. CSVエクスポート
 4. タスクコメント（Markdown）
 5. データ取得API
