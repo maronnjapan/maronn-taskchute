@@ -30,9 +30,3 @@ jobs:
 
       - name: Unit & Integration tests
         run: pnpm run test:ci
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
