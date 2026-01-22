@@ -12,8 +12,10 @@
     "typecheck": "tsc",
     "gen:wrangler:types": "wrangler types",
     "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "test": "vitest",
-    "test:ci": "vitest run --coverage"
+    "test:ci": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "hono": "^4.11.5",
@@ -23,19 +25,27 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^22",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.53.1",
+    "@typescript-eslint/parser": "^8.53.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.0.17",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "esbuild": "^0.24.2",
     "eslint": "^9.18.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.26",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.53.1",
     "vite": "^7.1.7",
-    "vitest": "^2.1.8",
+    "vitest": "^4.0.17",
     "wrangler": "^4.4.0"
   }
 }
