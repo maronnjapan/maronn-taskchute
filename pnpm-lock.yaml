@@ -24,6 +24,9 @@ importers:
         specifier: ^5.0.2
         version: 5.0.10(@types/react@18.3.27)(react@18.3.1)
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.2
+        version: 9.39.2
       '@types/node':
         specifier: ^22
         version: 22.19.7
