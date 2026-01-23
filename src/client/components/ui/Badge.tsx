@@ -37,7 +37,7 @@ const statusVariants: Record<TaskStatus, BadgeVariant> = {
 
 const statusLabels: Record<TaskStatus, string> = {
   pending: '未着手',
-  in_progress: '進行中',
+  in_progress: '着手済',
 };
 
 interface TaskStatusBadgeProps {
