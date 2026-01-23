@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/use-auth';
 import { useWorkspaces } from '../hooks/use-workspaces';
-import { useTasks, useAverageDurationByTitle } from '../hooks/use-tasks';
+import { useTasks, useAverageDurationByTitle, useActiveTimeEntries } from '../hooks/use-tasks';
 import { useWorkspaceStore } from '../stores/workspace-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
@@ -34,8 +34,8 @@ export function TaskListPage() {
     closeTaskForm,
   } = useUiStore();
 
-  // Track active time entries per task
-  const [activeTimeEntries, setActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
+  // Track active time entries per task (manual updates)
+  const [manualActiveTimeEntries, setManualActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
 
   // Auto-select first workspace if none selected
   const activeWorkspaceId = useMemo(() => {
@@ -65,6 +65,9 @@ export function TaskListPage() {
     isUpdating,
   } = useTasks(activeWorkspaceId ?? '', { date: selectedDate });
 
+  // Fetch active time entries from server
+  const { data: serverActiveTimeEntries } = useActiveTimeEntries(activeWorkspaceId ?? '', tasks);
+
   // Get the task being edited
   const editingTask = useMemo(
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
@@ -85,6 +88,22 @@ export function TaskListPage() {
     }
     return undefined;
   }, [editingTask, averageDuration]);
+
+  // Merge server and manual active time entries
+  const activeTimeEntries = useMemo(() => {
+    const merged = new Map<string, TimeEntry>();
+    // Start with server data
+    if (serverActiveTimeEntries) {
+      serverActiveTimeEntries.forEach((entry, taskId) => {
+        merged.set(taskId, entry);
+      });
+    }
+    // Override with manual updates
+    manualActiveTimeEntries.forEach((entry, taskId) => {
+      merged.set(taskId, entry);
+    });
+    return merged;
+  }, [serverActiveTimeEntries, manualActiveTimeEntries]);
 
   // Handlers
   const handleCreateWorkspace = useCallback(
@@ -134,7 +153,7 @@ export function TaskListPage() {
       if (!activeWorkspaceId) return;
       try {
         const timeEntry = await timeEntryApi.start(activeWorkspaceId, taskId);
-        setActiveTimeEntries((prev) => {
+        setManualActiveTimeEntries((prev) => {
           const next = new Map(prev);
           next.set(taskId, timeEntry);
           return next;
@@ -151,7 +170,7 @@ export function TaskListPage() {
       if (!activeWorkspaceId) return;
       try {
         await timeEntryApi.stop(activeWorkspaceId, taskId, timeEntryId);
-        setActiveTimeEntries((prev) => {
+        setManualActiveTimeEntries((prev) => {
           const next = new Map(prev);
           next.delete(taskId);
           return next;

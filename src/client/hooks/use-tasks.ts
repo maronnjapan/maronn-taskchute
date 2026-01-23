@@ -178,3 +178,37 @@ export function useAverageDurationByTitle(workspaceId: string, title: string | u
     enabled: Boolean(workspaceId) && Boolean(title),
   });
 }
+
+// Hook to fetch all active time entries for a workspace
+export function useActiveTimeEntries(workspaceId: string, tasks: Task[]) {
+  return useQuery({
+    queryKey: ['activeTimeEntries', workspaceId, tasks.map(t => t.id).join(',')] as const,
+    queryFn: async () => {
+      if (tasks.length === 0) {
+        return new Map<string, TimeEntry>();
+      }
+
+      const activeEntries = new Map<string, TimeEntry>();
+
+      // Fetch time entries for all tasks in parallel
+      await Promise.all(
+        tasks.map(async (task) => {
+          try {
+            const entries = await timeEntryApi.list(workspaceId, task.id);
+            // Find active entry (endedAt is null)
+            const activeEntry = entries.find((entry) => !entry.endedAt);
+            if (activeEntry) {
+              activeEntries.set(task.id, activeEntry);
+            }
+          } catch (error) {
+            console.error(`Failed to fetch time entries for task ${task.id}:`, error);
+          }
+        })
+      );
+
+      return activeEntries;
+    },
+    enabled: Boolean(workspaceId) && tasks.length > 0,
+    staleTime: 0, // Always fetch fresh data to ensure we have the latest state
+  });
+}
