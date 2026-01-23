@@ -14,6 +14,7 @@ import {
   createTaskSchema,
   updateTaskSchema,
   reorderTasksSchema,
+  updateTimeEntrySchema,
 } from '../../shared/validators/index';
 import type { User, TaskStatus } from '../../shared/types/index';
 
@@ -303,6 +304,45 @@ workspaces.post('/:id/tasks/:taskId/time-entries/:timeEntryId/stop', async (c) =
 
   return c.json({ data: timeEntry });
 });
+
+// PATCH /api/workspaces/:id/tasks/:taskId/time-entries/:timeEntryId - Update time entry
+workspaces.patch(
+  '/:id/tasks/:taskId/time-entries/:timeEntryId',
+  zValidator('json', updateTimeEntrySchema),
+  async (c) => {
+    const workspaceId = c.req.param('id');
+    const taskId = c.req.param('taskId');
+    const timeEntryId = c.req.param('timeEntryId');
+    const userId = c.get('userId');
+    const input = c.req.valid('json');
+    const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
+
+    // Verify workspace access
+    const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+    if (!canAccess) {
+      throw forbiddenError('Access denied');
+    }
+
+    // Verify task belongs to workspace
+    const belongsTo = await taskService.belongsToWorkspace(taskId, workspaceId);
+    if (!belongsTo) {
+      throw notFoundError('Task not found');
+    }
+
+    // Verify time entry belongs to task
+    const existingEntry = await timeEntryService.getTimeEntryById(timeEntryId);
+    if (existingEntry?.taskId !== taskId) {
+      throw notFoundError('Time entry not found');
+    }
+
+    const timeEntry = await timeEntryService.updateTimeEntry(timeEntryId, input);
+    if (!timeEntry) {
+      throw notFoundError('Time entry not found');
+    }
+
+    return c.json({ data: timeEntry });
+  }
+);
 
 // GET /api/workspaces/:id/tasks/:taskId/time-entries - Get time entries for a task
 workspaces.get('/:id/tasks/:taskId/time-entries', async (c) => {

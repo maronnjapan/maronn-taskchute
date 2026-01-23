@@ -10,6 +10,7 @@ interface TaskCardProps {
   onDelete?: (taskId: string) => void;
   onStartTimeEntry?: (taskId: string) => void;
   onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
+  onViewTimeEntries?: (task: Task) => void;
   isDragging?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
@@ -21,6 +22,7 @@ export function TaskCard({
   onDelete,
   onStartTimeEntry,
   onStopTimeEntry,
+  onViewTimeEntries,
   isDragging = false,
   dragHandleProps,
 }: TaskCardProps) {
@@ -97,6 +99,11 @@ export function TaskCard({
             ) : (
               <Button size="sm" onClick={handleStart}>
                 記録開始
+              </Button>
+            )}
+            {onViewTimeEntries && (
+              <Button size="sm" variant="ghost" onClick={() => onViewTimeEntries(task)}>
+                時間記録
               </Button>
             )}
             {onEdit && (

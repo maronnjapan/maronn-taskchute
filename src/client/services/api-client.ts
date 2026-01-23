@@ -14,6 +14,7 @@ import type {
   CreateTaskCommentInput,
   UpdateTaskCommentInput,
   ReorderTasksInput,
+  UpdateTimeEntryInput,
 } from '../../shared/validators/index';
 
 const BASE_URL = '';
@@ -214,6 +215,25 @@ export const timeEntryApi = {
       {
         method: 'POST',
         credentials: 'include',
+      }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
+  },
+
+  async update(
+    workspaceId: string,
+    taskId: string,
+    timeEntryId: string,
+    input: UpdateTimeEntryInput
+  ): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries/${timeEntryId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(input),
       }
     );
     const result = await handleResponse<ApiResponse<TimeEntry>>(response);

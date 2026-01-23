@@ -15,6 +15,7 @@ import {
   WorkspaceForm,
   TimeSummary,
   ShareLinkDisplay,
+  TimeEntryListModal,
 } from '../components/features';
 import { timeEntryApi } from '../services/api-client';
 import type { Task, TimeEntry } from '../../shared/types/index';
@@ -36,6 +37,9 @@ export function TaskListPage() {
 
   // Track active time entries per task (manual updates)
   const [manualActiveTimeEntries, setManualActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
+
+  // Track task for time entry modal
+  const [viewingTimeEntriesTask, setViewingTimeEntriesTask] = useState<Task | null>(null);
 
   // Auto-select first workspace if none selected
   const activeWorkspaceId = useMemo(() => {
@@ -182,6 +186,14 @@ export function TaskListPage() {
     [activeWorkspaceId]
   );
 
+  const handleViewTimeEntries = useCallback((task: Task) => {
+    setViewingTimeEntriesTask(task);
+  }, []);
+
+  const handleCloseTimeEntries = useCallback(() => {
+    setViewingTimeEntriesTask(null);
+  }, []);
+
   // Loading state
   if (isAuthLoading) {
     return (
@@ -275,6 +287,7 @@ export function TaskListPage() {
           onDeleteTask={handleDeleteTask}
           onStartTimeEntry={handleStartTimeEntry}
           onStopTimeEntry={handleStopTimeEntry}
+          onViewTimeEntries={handleViewTimeEntries}
           onReorder={(taskIds) => reorder({ taskIds })}
           emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
         />
@@ -315,6 +328,16 @@ export function TaskListPage() {
           isSubmitting={isCreatingWorkspace}
         />
       </Dialog>
+
+      {/* Time entry list modal */}
+      {viewingTimeEntriesTask && activeWorkspaceId && (
+        <TimeEntryListModal
+          isOpen={Boolean(viewingTimeEntriesTask)}
+          onClose={handleCloseTimeEntries}
+          task={viewingTimeEntriesTask}
+          workspaceId={activeWorkspaceId}
+        />
+      )}
     </div>
   );
 }
