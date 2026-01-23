@@ -106,7 +106,7 @@ export function TaskForm({
         />
 
         <Input
-          label="見積時間（分）"
+          label="見積時間（分・任意）"
           type="number"
           {...register('estimatedMinutes', { valueAsNumber: true })}
           error={errors.estimatedMinutes?.message}
