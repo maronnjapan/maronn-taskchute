@@ -52,7 +52,7 @@ export function TimeSummary({ tasks }: TimeSummaryProps) {
           </p>
         </div>
         <div>
-          <p className="text-xs text-gray-500">進行中</p>
+          <p className="text-xs text-gray-500">着手済</p>
           <p className="text-lg font-semibold text-blue-600">{summary.inProgressCount}</p>
         </div>
         <div>

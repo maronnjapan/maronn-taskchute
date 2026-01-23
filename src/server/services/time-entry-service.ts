@@ -29,7 +29,7 @@ export class TimeEntryService {
       const totalDuration = await this.timeEntryRepo.getTotalDurationByTaskId(entry.taskId);
       await this.taskRepo.update(entry.taskId, {
         actualMinutes: totalDuration,
-        status: 'pending', // Reset to pending when stopped
+        status: totalDuration > 0 ? 'in_progress' : 'pending', // Keep in_progress if any duration recorded
       });
     }
     return entry;
@@ -58,6 +58,7 @@ export class TimeEntryService {
       const totalDuration = await this.timeEntryRepo.getTotalDurationByTaskId(entry.taskId);
       await this.taskRepo.update(entry.taskId, {
         actualMinutes: totalDuration,
+        status: totalDuration > 0 ? 'in_progress' : 'pending', // Update status based on total duration
       });
     }
 
