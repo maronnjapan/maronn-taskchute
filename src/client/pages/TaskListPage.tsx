@@ -79,8 +79,8 @@ export function TaskListPage() {
 
   // Calculate default estimated minutes for task form
   const defaultEstimatedMinutes = useMemo(() => {
-    // Only use average duration for repeating tasks that don't have an estimated time set
-    if (editingTask?.repeatPattern && !editingTask.estimatedMinutes && averageDuration) {
+    // For editing repeating tasks, use average duration as default if available
+    if (editingTask?.repeatPattern && averageDuration) {
       return Math.round(averageDuration);
     }
     return undefined;

@@ -55,7 +55,7 @@ export function TaskForm({
           title: task.title,
           description: task.description ?? '',
           scheduledDate: task.scheduledDate,
-          estimatedMinutes: task.estimatedMinutes,
+          estimatedMinutes: defaultEstimatedMinutes ?? task.estimatedMinutes,
           repeatPattern: task.repeatPattern ?? null,
         }
       : {
@@ -73,8 +73,8 @@ export function TaskForm({
     const cleanData: CreateTaskInput | UpdateTaskInput = {
       ...data,
       description: data.description === '' ? undefined : data.description,
-      estimatedMinutes: data.estimatedMinutes === 0 ? undefined : data.estimatedMinutes,
-      repeatPattern: data.repeatPattern ?? undefined,
+      estimatedMinutes: Number.isNaN(data.estimatedMinutes) ? undefined : data.estimatedMinutes,
+      repeatPattern: data.repeatPattern === '' || data.repeatPattern === null ? undefined : data.repeatPattern,
     };
     onSubmit(cleanData);
   };

@@ -72,7 +72,11 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
       // Optimistic update
       reorderTasks(input.taskIds);
     },
-    onSuccess: () => {
+    onSuccess: (updatedTasks) => {
+      // Update store with the server response
+      updatedTasks.forEach(task => {
+        updateTask(task.id, task);
+      });
       void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
     onError: () => {
@@ -118,6 +122,7 @@ export function useTasksByShareToken(
 // Time Entry Hooks
 export function useTimeEntries(workspaceId: string, taskId: string) {
   const queryClient = useQueryClient();
+  const { updateTask } = useTaskStore();
 
   const listQuery = useQuery({
     queryKey: timeEntryKeys.list(workspaceId, taskId),
@@ -135,7 +140,14 @@ export function useTimeEntries(workspaceId: string, taskId: string) {
 
   const stopMutation = useMutation({
     mutationFn: (timeEntryId: string) => timeEntryApi.stop(workspaceId, taskId, timeEntryId),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Immediately refetch the task to get updated actualMinutes
+      try {
+        const updatedTask = await taskApi.get(workspaceId, taskId);
+        updateTask(updatedTask.id, updatedTask);
+      } catch (error) {
+        console.error('Failed to refetch task after stopping time entry:', error);
+      }
       void queryClient.invalidateQueries({ queryKey: timeEntryKeys.list(workspaceId, taskId) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },

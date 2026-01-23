@@ -44,8 +44,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         })
         .filter((t): t is Task => t !== null);
 
+      // Keep other tasks that are not in taskIds
       const otherTasks = state.tasks.filter((t) => !taskIds.includes(t.id));
-      return { tasks: [...otherTasks, ...reorderedTasks] };
+
+      // Merge and sort all tasks by sortOrder
+      const allTasks = [...reorderedTasks, ...otherTasks];
+      allTasks.sort((a, b) => a.sortOrder - b.sortOrder);
+
+      return { tasks: allTasks };
     }),
   getTasksForSelectedDate: () => {
     const state = get();
