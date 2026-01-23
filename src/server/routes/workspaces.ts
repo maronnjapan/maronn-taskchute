@@ -341,7 +341,7 @@ workspaces.get('/:id/tasks/:taskId/average-duration', async (c) => {
   }
 
   const task = await taskService.getTaskById(taskId);
-  if (!task || task.workspaceId !== workspaceId) {
+  if (task?.workspaceId !== workspaceId) {
     throw notFoundError('Task not found');
   }
 

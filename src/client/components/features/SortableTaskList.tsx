@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -93,15 +93,25 @@ export function SortableTaskList({
   // Local state for immediate visual feedback during drag
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
   // Track if we have a pending reorder to prevent external updates
-  const pendingReorderRef = useRef(false);
+  const [isPendingReorder, setIsPendingReorder] = useState(false);
 
-  // Sync external tasks with local state when not in pending reorder state
-  const displayTasks = useMemo(() => {
-    if (pendingReorderRef.current) {
+  // Determine which tasks to display
+  const tasksToDisplay = useMemo(() => {
+    if (isPendingReorder) {
       return localTasks;
     }
     return tasks;
-  }, [tasks, localTasks]);
+  }, [isPendingReorder, localTasks, tasks]);
+
+  // Sync local tasks when props change and not pending
+  const propsTaskIds = tasks.map((t) => t.id).join(',');
+  const localTaskIds = localTasks.map((t) => t.id).join(',');
+  const shouldSync = !isPendingReorder && propsTaskIds !== localTaskIds && tasks.length !== localTasks.length;
+
+  // Keep local tasks in sync with props when we're not in pending state
+  if (shouldSync) {
+    void Promise.resolve().then(() => setLocalTasks(tasks));
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -115,8 +125,8 @@ export function SortableTaskList({
   );
 
   const activeTask = useMemo(
-    () => displayTasks.find((t) => t.id === activeId),
-    [displayTasks, activeId]
+    () => tasksToDisplay.find((t) => t.id === activeId),
+    [tasksToDisplay, activeId]
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -130,42 +140,35 @@ export function SortableTaskList({
       setActiveId(null);
 
       if (over && active.id !== over.id) {
-        const oldIndex = displayTasks.findIndex((t) => t.id === active.id);
-        const newIndex = displayTasks.findIndex((t) => t.id === over.id);
+        const oldIndex = tasksToDisplay.findIndex((t) => t.id === active.id);
+        const newIndex = tasksToDisplay.findIndex((t) => t.id === over.id);
 
         if (oldIndex !== -1 && newIndex !== -1) {
-          const newTasks = arrayMove(displayTasks, oldIndex, newIndex);
+          const newTasks = arrayMove(tasksToDisplay, oldIndex, newIndex);
 
           // Update local state immediately for visual feedback
           setLocalTasks(newTasks);
-          pendingReorderRef.current = true;
+          setIsPendingReorder(true);
 
           const taskIds = newTasks.map((t) => t.id);
           onReorder?.(taskIds);
 
           // Reset pending state after a short delay to allow server sync
           setTimeout(() => {
-            pendingReorderRef.current = false;
+            setIsPendingReorder(false);
           }, 500);
         }
       }
     },
-    [displayTasks, onReorder]
+    [tasksToDisplay, onReorder]
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
-    pendingReorderRef.current = false;
+    setIsPendingReorder(false);
   }, []);
 
-  // Sync local tasks when external tasks change and we're not pending
-  useMemo(() => {
-    if (!pendingReorderRef.current) {
-      setLocalTasks(tasks);
-    }
-  }, [tasks]);
-
-  if (displayTasks.length === 0) {
+  if (tasksToDisplay.length === 0) {
     return (
       <div className="text-center py-12">
         <svg
@@ -194,9 +197,9 @@ export function SortableTaskList({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={displayTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={tasksToDisplay.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
-          {displayTasks.map((task) => (
+          {tasksToDisplay.map((task) => (
             <SortableTaskItem
               key={task.id}
               task={task}

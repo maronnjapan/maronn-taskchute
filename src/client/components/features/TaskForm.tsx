@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { createTaskSchema, repeatPatternSchema } from '../../../shared/validators/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../../shared/validators/index';
 import type { Task, RepeatPattern } from '../../../shared/types/index';
@@ -74,7 +74,7 @@ export function TaskForm({
       ...data,
       description: data.description === '' ? undefined : data.description,
       estimatedMinutes: data.estimatedMinutes === 0 ? undefined : data.estimatedMinutes,
-      repeatPattern: data.repeatPattern || undefined,
+      repeatPattern: data.repeatPattern ?? undefined,
     };
     onSubmit(cleanData);
   };
