@@ -34,12 +34,25 @@ echo -e "${YELLOW}環境: ${ENVIRONMENT}${NC}"
 if [ "$ENVIRONMENT" = "production" ]; then
   APP_NAME="TaskChute Web App"
   API_NAME="TaskChute API"
-  API_IDENTIFIER="https://api.taskchute.app"
+  DEFAULT_API_IDENTIFIER="https://api.taskchute.app"
 else
   APP_NAME="TaskChute Web App (${ENVIRONMENT})"
   API_NAME="TaskChute API (${ENVIRONMENT})"
-  API_IDENTIFIER="https://api.taskchute.app/${ENVIRONMENT}"
+  DEFAULT_API_IDENTIFIER="https://api.taskchute.app/${ENVIRONMENT}"
 fi
+
+# API識別子の入力
+echo ""
+echo "API Identifier (Audience) を入力してください:"
+echo -e "${YELLOW}デフォルト: ${DEFAULT_API_IDENTIFIER}${NC}"
+echo "（空欄の場合はデフォルト値を使用します）"
+read -r API_IDENTIFIER
+
+if [ -z "$API_IDENTIFIER" ]; then
+  API_IDENTIFIER="$DEFAULT_API_IDENTIFIER"
+fi
+
+echo -e "使用するAPI Identifier: ${YELLOW}$API_IDENTIFIER${NC}"
 
 # コールバックURLの設定
 echo ""
@@ -117,8 +130,8 @@ if [ -n "$EXISTING_APP" ]; then
   echo -e "${YELLOW}アプリケーション '$APP_NAME' は既に存在します${NC}"
   CLIENT_ID="$EXISTING_APP"
 
-  # シークレットを取得
-  APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --json 2>/dev/null)
+  # シークレットを取得（--revealオプションでシークレットを表示）
+  APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal --json 2>/dev/null)
   CLIENT_SECRET=$(echo "$APP_DETAILS" | jq -r '.client_secret // empty')
 else
   echo "アプリケーション '$APP_NAME' を作成中..."
@@ -143,7 +156,7 @@ else
     CLIENT_ID=$(auth0 apps list --json 2>/dev/null | jq -r ".[] | select(.name==\"$APP_NAME\") | .client_id" || echo "")
 
     if [ -n "$CLIENT_ID" ]; then
-      APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --json 2>/dev/null)
+      APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal --json 2>/dev/null)
       CLIENT_SECRET=$(echo "$APP_DETAILS" | jq -r '.client_secret // empty')
     fi
   fi

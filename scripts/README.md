@@ -65,6 +65,18 @@ npm run setup:cloudflare
 npm run setup:auth0
 ```
 
+セットアップ時に以下の入力が求められます：
+- **API Identifier (Audience)**: Auth0 APIの識別子（例: `https://api.taskchute.app`）
+  - 空欄の場合は環境に応じたデフォルト値が使用されます
+  - Production: `https://api.taskchute.app`
+  - Development/Staging: `https://api.taskchute.app/{環境名}`
+- **コールバックURL**: 認証後のリダイレクト先（複数可、カンマ区切り）
+  - 例: `http://localhost:8787/auth/callback,https://your-domain.workers.dev/auth/callback`
+- **ログアウトURL**: ログアウト後のリダイレクト先（複数可、カンマ区切り）
+  - 例: `http://localhost:5173,https://your-domain.com`
+- **Allowed Origins (CORS)**: クロスオリジンリクエストを許可するオリジン（複数可、カンマ区切り）
+  - 例: `http://localhost:5173,https://your-domain.com`
+
 以下が作成されます：
 - Auth0 API（アクセストークンのpayloadに値を含めるため）
 - Auth0アプリケーション（Regular Web Application）
@@ -73,7 +85,7 @@ npm run setup:auth0
 - `.auth0-config.json` (設定ファイル)
 
 Auth0 APIを作成することで、アクセストークンに以下のような情報が含まれます：
-- `aud`: API識別子
+- `aud`: API識別子（指定したAPI Identifier）
 - `scope`: 許可されたスコープ
 - カスタムクレーム（必要に応じて追加可能）
 
@@ -202,6 +214,21 @@ ENVIRONMENT=production npm run setup
 - `write:workspaces` - ワークスペースの作成・更新・削除
 - `read:comments` - コメントの読み取り
 - `write:comments` - コメントの作成・更新・削除
+
+### API Identifier (Audience) のカスタマイズ
+
+セットアップ時に API Identifier を指定できます。これは以下の用途で使用されます：
+
+- **アクセストークンの `aud` クレーム**: トークンの対象APIを識別
+- **トークン検証**: バックエンドでトークンの有効性を確認
+- **マルチテナント対応**: 環境ごとに異なるAPIを作成
+
+デフォルト値：
+- Production: `https://api.taskchute.app`
+- Development: `https://api.taskchute.app/development`
+- Staging: `https://api.taskchute.app/staging`
+
+独自のドメインを使用する場合は、セットアップ時に指定してください（例: `https://api.example.com`）。
 
 APIを作成することで、アクセストークンに `aud`（audience）クレームが含まれ、トークンの検証が可能になります。
 
