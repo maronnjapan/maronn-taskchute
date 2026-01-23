@@ -130,8 +130,8 @@ if [ -n "$EXISTING_APP" ]; then
   echo -e "${YELLOW}アプリケーション '$APP_NAME' は既に存在します${NC}"
   CLIENT_ID="$EXISTING_APP"
 
-  # シークレットを取得（--revealオプションでシークレットを表示）
-  APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal --json 2>/dev/null)
+  # シークレットを取得（--reveal-secretsオプションでシークレットを表示）
+  APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal-secrets --json 2>/dev/null)
   CLIENT_SECRET=$(echo "$APP_DETAILS" | jq -r '.client_secret // empty')
 else
   echo "アプリケーション '$APP_NAME' を作成中..."
@@ -156,7 +156,7 @@ else
     CLIENT_ID=$(auth0 apps list --json 2>/dev/null | jq -r ".[] | select(.name==\"$APP_NAME\") | .client_id" || echo "")
 
     if [ -n "$CLIENT_ID" ]; then
-      APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal --json 2>/dev/null)
+      APP_DETAILS=$(auth0 apps show "$CLIENT_ID" --reveal-secrets --json 2>/dev/null)
       CLIENT_SECRET=$(echo "$APP_DETAILS" | jq -r '.client_secret // empty')
     fi
   fi
