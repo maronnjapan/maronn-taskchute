@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createTaskSchema, repeatPatternSchema } from '../../../shared/validators/index';
@@ -14,7 +14,15 @@ const taskFormSchema = createTaskSchema.extend({
   repeatPattern: repeatPatternSchema.nullable().optional().or(z.literal('')),
 });
 
-type TaskFormFields = z.infer<typeof taskFormSchema>;
+// Explicitly define form fields type to handle optional estimatedMinutes correctly
+interface TaskFormFields {
+  title: string;
+  description?: string;
+  scheduledDate: string;
+  estimatedMinutes?: number;
+  sortOrder?: number;
+  repeatPattern?: RepeatPattern | '' | null;
+}
 
 const repeatPatternOptions: { value: RepeatPattern | ''; label: string }[] = [
   { value: '', label: '繰り返しなし' },
@@ -49,7 +57,7 @@ export function TaskForm({
     formState: { errors },
     watch,
   } = useForm<TaskFormFields>({
-    resolver: zodResolver(taskFormSchema),
+    resolver: zodResolver(taskFormSchema) as Resolver<TaskFormFields>,
     defaultValues: task
       ? {
           title: task.title,
