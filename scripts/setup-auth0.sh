@@ -19,12 +19,8 @@ if ! command -v auth0 &> /dev/null; then
   exit 1
 fi
 
-# Auth0にログインしているか確認
-echo "Auth0にログインしているか確認します..."
-if ! auth0 tenants list &> /dev/null; then
-  echo "Auth0にログインしてください..."
-  auth0 login
-fi
+# Auth0にログイン
+auth0 login --scopes create:client_grants
 
 # 環境変数の確認
 ENVIRONMENT=${ENVIRONMENT:-development}
@@ -144,7 +140,8 @@ else
     --logout-urls "$LOGOUT_URLS" \
     --origins "$ALLOWED_ORIGINS" \
     --web-origins "$ALLOWED_ORIGINS" \
-    --grants "authorization_code,refresh_token" \
+    --grants "code,refresh-token" \
+    --reveal-secrets \
     --json 2>/dev/null || echo "{}")
 
   CLIENT_ID=$(echo "$APP_OUTPUT" | jq -r '.client_id // empty')
@@ -171,7 +168,7 @@ else
 fi
 
 # Auth0ドメインを取得
-AUTH0_DOMAIN=$(auth0 tenants list --json 2>/dev/null | jq -r '.[0].domain // empty')
+AUTH0_DOMAIN=$(auth0 tenants list --json 2>/dev/null | jq -r '.[] | select(.active == true) | .name' | head -n 1)
 
 if [ -z "$AUTH0_DOMAIN" ]; then
   echo -e "${RED}Error: Auth0ドメインの取得に失敗しました${NC}"

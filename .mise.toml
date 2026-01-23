@@ -1,0 +1,5 @@
+# mise設定ファイル
+
+# 必要なツールとバージョンを定義
+[tools]
+"aqua:auth0/auth0-cli" = "latest"

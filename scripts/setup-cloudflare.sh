@@ -92,7 +92,7 @@ if [ -d "migrations" ] && [ "$(ls -A migrations/*.sql 2>/dev/null)" ]; then
   if [ "$APPLY_MIGRATIONS" = "y" ] || [ "$APPLY_MIGRATIONS" = "Y" ]; then
     if [ "$ENVIRONMENT" = "production" ]; then
       echo "本番環境にマイグレーションを適用します..."
-      wrangler d1 migrations apply "$DB_NAME"
+      wrangler d1 migrations apply "$DB_NAME" --remote
     else
       echo "ローカル環境にマイグレーションを適用します..."
       wrangler d1 migrations apply "$DB_NAME" --local

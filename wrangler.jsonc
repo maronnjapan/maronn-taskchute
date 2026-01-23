@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "taskchute-db",
-      "database_id": "placeholder-database-id",
+      "database_id": "312d903b-ae8e-4fb8-8ff2-54f42cee4cc9",
       "migrations_dir": "migrations"
     }
   ],
@@ -25,6 +25,8 @@
     }
   ],
   "triggers": {
-    "crons": ["0 3 * * *"]
+    "crons": [
+      "0 3 * * *"
+    ]
   }
 }

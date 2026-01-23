@@ -19,7 +19,8 @@
     "setup": "bash scripts/setup.sh",
     "setup:cloudflare": "bash scripts/setup-cloudflare.sh",
     "setup:auth0": "bash scripts/setup-auth0.sh",
-    "push:secrets": "bash scripts/push-secrets.sh"
+    "push:secrets": "bash scripts/push-secrets.sh",
+    "db:migrate:remote": "wrangler d1 migrations apply taskchute-db --remote"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
