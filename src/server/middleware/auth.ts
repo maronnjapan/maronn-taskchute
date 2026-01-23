@@ -9,6 +9,7 @@ interface AuthEnv {
   AUTH0_CLIENT_ID: string;
   AUTH0_CLIENT_SECRET: string;
   AUTH0_CALLBACK_URL: string;
+  AUTH0_AUDIENCE: string;
 }
 
 // Extend Hono's context to include user
@@ -30,6 +31,7 @@ export function createAuthMiddleware(db: D1Database) {
       clientId: env.AUTH0_CLIENT_ID,
       clientSecret: env.AUTH0_CLIENT_SECRET,
       callbackUrl: env.AUTH0_CALLBACK_URL,
+      audience: env.AUTH0_AUDIENCE,
     });
 
     const sessionId = authService.getSessionIdFromCookie(c);

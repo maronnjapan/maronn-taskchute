@@ -9,6 +9,7 @@ interface Auth0Config {
   clientId: string;
   clientSecret: string;
   callbackUrl: string;
+  audience: string;
 }
 
 interface Auth0TokenResponse {
@@ -32,20 +33,23 @@ export class AuthService {
     private config: Auth0Config
   ) {}
 
-  getLoginUrl(state: string): string {
+  getLoginUrl(state: string, codeChallenge: string): string {
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.config.clientId,
       redirect_uri: this.config.callbackUrl,
       scope: 'openid profile email',
       state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      audience: this.config.audience,
     });
 
     return `https://${this.config.domain}/authorize?${params.toString()}`;
   }
 
-  async handleCallback(code: string): Promise<{ user: User; session: Session }> {
-    // Exchange code for tokens
+  async handleCallback(code: string, codeVerifier: string): Promise<{ user: User; session: Session }> {
+    // Exchange code for tokens with PKCE
     const tokenResponse = await fetch(`https://${this.config.domain}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,6 +59,7 @@ export class AuthService {
         client_secret: this.config.clientSecret,
         code,
         redirect_uri: this.config.callbackUrl,
+        code_verifier: codeVerifier,
       }),
     });
 

@@ -101,3 +101,46 @@ export function addDaysToDateString(dateStr: string, days: number): string {
   date.setDate(date.getDate() + days);
   return formatDateString(date);
 }
+
+/**
+ * Generate a PKCE code verifier (random string 43-128 characters)
+ * Uses unreserved characters: A-Z, a-z, 0-9, -, ., _, ~
+ */
+export function generateCodeVerifier(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const length = 128; // Maximum length for security
+  let result = '';
+
+  // Use crypto.getRandomValues for cryptographically secure random values
+  const randomValues = new Uint8Array(length);
+  crypto.getRandomValues(randomValues);
+
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(randomValues[i] % chars.length);
+  }
+
+  return result;
+}
+
+/**
+ * Generate a PKCE code challenge from a code verifier
+ * code_challenge = BASE64URL(SHA256(ASCII(code_verifier)))
+ */
+export async function generateCodeChallenge(verifier: string): Promise<string> {
+  // Convert verifier to ArrayBuffer
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+
+  // Hash with SHA-256
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+
+  // Convert to Base64URL
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const base64 = btoa(String.fromCharCode(...hashArray));
+
+  // Convert Base64 to Base64URL
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
