@@ -1,4 +1,4 @@
-import type { TaskStatus } from '../../../shared/types/index';
+import type { TaskStatus, RepeatPattern } from '../../../shared/types/index';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
 
@@ -33,15 +33,11 @@ export function Badge({ variant = 'default', children, className = '' }: BadgePr
 const statusVariants: Record<TaskStatus, BadgeVariant> = {
   pending: 'default',
   in_progress: 'info',
-  completed: 'success',
-  carried_over: 'warning',
 };
 
 const statusLabels: Record<TaskStatus, string> = {
   pending: '未着手',
   in_progress: '進行中',
-  completed: '完了',
-  carried_over: '繰り越し',
 };
 
 interface TaskStatusBadgeProps {
@@ -53,6 +49,27 @@ export function TaskStatusBadge({ status, className = '' }: TaskStatusBadgeProps
   return (
     <Badge variant={statusVariants[status]} className={className}>
       {statusLabels[status]}
+    </Badge>
+  );
+}
+
+// Repeat pattern badge
+const repeatPatternLabels: Record<RepeatPattern, string> = {
+  daily: '毎日',
+  weekdays: '平日',
+  weekly: '毎週',
+  monthly: '毎月',
+};
+
+interface RepeatPatternBadgeProps {
+  pattern: RepeatPattern;
+  className?: string;
+}
+
+export function RepeatPatternBadge({ pattern, className = '' }: RepeatPatternBadgeProps) {
+  return (
+    <Badge variant="success" className={className}>
+      {repeatPatternLabels[pattern]}
     </Badge>
   );
 }

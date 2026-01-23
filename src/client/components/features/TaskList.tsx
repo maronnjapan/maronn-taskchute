@@ -1,19 +1,23 @@
-import type { Task } from '../../../shared/types/index';
+import type { Task, TimeEntry } from '../../../shared/types/index';
 import { TaskCard } from './TaskCard';
 
 interface TaskListProps {
   tasks: Task[];
+  activeTimeEntries?: Map<string, TimeEntry>;
   onEditTask?: (task: Task) => void;
   onDeleteTask?: (taskId: string) => void;
-  onStatusChange?: (taskId: string, status: Task['status']) => void;
+  onStartTimeEntry?: (taskId: string) => void;
+  onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   emptyMessage?: string;
 }
 
 export function TaskList({
   tasks,
+  activeTimeEntries,
   onEditTask,
   onDeleteTask,
-  onStatusChange,
+  onStartTimeEntry,
+  onStopTimeEntry,
   emptyMessage = 'タスクがありません',
 }: TaskListProps) {
   if (tasks.length === 0) {
@@ -43,9 +47,11 @@ export function TaskList({
         <TaskCard
           key={task.id}
           task={task}
+          activeTimeEntry={activeTimeEntries?.get(task.id)}
           onEdit={onEditTask}
           onDelete={onDeleteTask}
-          onStatusChange={onStatusChange}
+          onStartTimeEntry={onStartTimeEntry}
+          onStopTimeEntry={onStopTimeEntry}
         />
       ))}
     </div>

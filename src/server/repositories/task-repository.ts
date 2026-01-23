@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Task, TaskStatus } from '../../shared/types/index';
+import type { Task, TaskStatus, RepeatPattern } from '../../shared/types/index';
 import { generateId, nowUnix } from '../../shared/utils/index';
 
 interface TaskRow {
@@ -12,8 +12,9 @@ interface TaskRow {
   estimated_minutes: number | null;
   actual_minutes: number | null;
   started_at: number | null;
-  completed_at: number | null;
   status: TaskStatus;
+  repeat_pattern: RepeatPattern | null;
+  repeat_end_date: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -29,11 +30,42 @@ function rowToTask(row: TaskRow): Task {
     estimatedMinutes: row.estimated_minutes ?? undefined,
     actualMinutes: row.actual_minutes ?? undefined,
     startedAt: row.started_at ?? undefined,
-    completedAt: row.completed_at ?? undefined,
     status: row.status,
+    repeatPattern: row.repeat_pattern ?? undefined,
+    repeatEndDate: row.repeat_end_date ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// Check if a repeating task should appear on a given date
+function shouldRepeatOnDate(task: Task, date: string): boolean {
+  if (!task.repeatPattern) return false;
+  if (task.scheduledDate > date) return false;
+  if (task.repeatEndDate && task.repeatEndDate < date) return false;
+
+  const taskDate = new Date(task.scheduledDate);
+  const targetDate = new Date(date);
+  const dayOfWeek = targetDate.getDay(); // 0 = Sunday, 6 = Saturday
+
+  switch (task.repeatPattern) {
+    case 'daily':
+      return true;
+    case 'weekdays':
+      return dayOfWeek >= 1 && dayOfWeek <= 5;
+    case 'weekly': {
+      // Same day of week as original
+      const taskDayOfWeek = taskDate.getDay();
+      return dayOfWeek === taskDayOfWeek;
+    }
+    case 'monthly': {
+      // Same day of month as original
+      const taskDayOfMonth = taskDate.getDate();
+      return targetDate.getDate() === taskDayOfMonth;
+    }
+    default:
+      return false;
+  }
 }
 
 export interface CreateTaskInput {
@@ -43,6 +75,7 @@ export interface CreateTaskInput {
   scheduledDate: string;
   estimatedMinutes?: number;
   sortOrder?: number;
+  repeatPattern?: RepeatPattern;
 }
 
 export interface UpdateTaskInput {
@@ -53,6 +86,8 @@ export interface UpdateTaskInput {
   actualMinutes?: number | null;
   status?: TaskStatus;
   sortOrder?: number;
+  repeatPattern?: RepeatPattern | null;
+  repeatEndDate?: string | null;
 }
 
 export class TaskRepository {
@@ -71,13 +106,15 @@ export class TaskRepository {
     workspaceId: string,
     options?: { date?: string; status?: TaskStatus }
   ): Promise<Task[]> {
+    if (options?.date) {
+      // When querying by date, include both:
+      // 1. Tasks scheduled for that exact date (non-repeating or first occurrence)
+      // 2. Repeating tasks that should appear on that date
+      return this.findByWorkspaceIdAndDate(workspaceId, options.date, options.status);
+    }
+
     let query = 'SELECT * FROM tasks WHERE workspace_id = ?';
     const params: (string | number)[] = [workspaceId];
-
-    if (options?.date) {
-      query += ' AND scheduled_date = ?';
-      params.push(options.date);
-    }
 
     if (options?.status) {
       query += ' AND status = ?';
@@ -94,22 +131,57 @@ export class TaskRepository {
     return (result.results ?? []).map(rowToTask);
   }
 
-  async findPendingByWorkspaceIdBeforeDate(
+  private async findByWorkspaceIdAndDate(
     workspaceId: string,
-    beforeDate: string
+    date: string,
+    status?: TaskStatus
   ): Promise<Task[]> {
-    const result = await this.db
-      .prepare(
-        `SELECT * FROM tasks
-         WHERE workspace_id = ?
-         AND scheduled_date < ?
-         AND status IN ('pending', 'in_progress')
-         ORDER BY scheduled_date ASC, sort_order ASC`
-      )
-      .bind(workspaceId, beforeDate)
+    // Get tasks scheduled for this exact date (non-repeating)
+    let nonRepeatingQuery = `
+      SELECT * FROM tasks
+      WHERE workspace_id = ?
+      AND scheduled_date = ?
+      AND repeat_pattern IS NULL
+    `;
+    const nonRepeatingParams: (string | number)[] = [workspaceId, date];
+
+    if (status) {
+      nonRepeatingQuery += ' AND status = ?';
+      nonRepeatingParams.push(status);
+    }
+
+    const nonRepeatingResult = await this.db
+      .prepare(nonRepeatingQuery)
+      .bind(...nonRepeatingParams)
       .all<TaskRow>();
 
-    return (result.results ?? []).map(rowToTask);
+    // Get all repeating tasks for this workspace that could appear on this date
+    let repeatingQuery = `
+      SELECT * FROM tasks
+      WHERE workspace_id = ?
+      AND repeat_pattern IS NOT NULL
+      AND scheduled_date <= ?
+      AND (repeat_end_date IS NULL OR repeat_end_date >= ?)
+    `;
+    const repeatingParams: (string | number)[] = [workspaceId, date, date];
+
+    if (status) {
+      repeatingQuery += ' AND status = ?';
+      repeatingParams.push(status);
+    }
+
+    const repeatingResult = await this.db
+      .prepare(repeatingQuery)
+      .bind(...repeatingParams)
+      .all<TaskRow>();
+
+    const nonRepeatingTasks = (nonRepeatingResult.results ?? []).map(rowToTask);
+    const repeatingTasks = (repeatingResult.results ?? [])
+      .map(rowToTask)
+      .filter((task) => shouldRepeatOnDate(task, date));
+
+    // Combine and sort by sort_order
+    return [...nonRepeatingTasks, ...repeatingTasks].sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   async getMaxSortOrder(workspaceId: string, date: string): Promise<number> {
@@ -131,8 +203,8 @@ export class TaskRepository {
     await this.db
       .prepare(
         `INSERT INTO tasks
-         (id, workspace_id, title, description, scheduled_date, sort_order, estimated_minutes, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+         (id, workspace_id, title, description, scheduled_date, sort_order, estimated_minutes, status, repeat_pattern, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
       )
       .bind(
         id,
@@ -142,6 +214,7 @@ export class TaskRepository {
         input.scheduledDate,
         sortOrder,
         input.estimatedMinutes ?? null,
+        input.repeatPattern ?? null,
         now,
         now
       )
@@ -182,6 +255,14 @@ export class TaskRepository {
       updates.push('sort_order = ?');
       values.push(input.sortOrder);
     }
+    if (input.repeatPattern !== undefined) {
+      updates.push('repeat_pattern = ?');
+      values.push(input.repeatPattern);
+    }
+    if (input.repeatEndDate !== undefined) {
+      updates.push('repeat_end_date = ?');
+      values.push(input.repeatEndDate);
+    }
     if (input.status !== undefined) {
       updates.push('status = ?');
       values.push(input.status);
@@ -190,16 +271,6 @@ export class TaskRepository {
       if (input.status === 'in_progress' && !task.startedAt) {
         updates.push('started_at = ?');
         values.push(now);
-      }
-      if (input.status === 'completed' && !task.completedAt) {
-        updates.push('completed_at = ?');
-        values.push(now);
-        // Calculate actual minutes if not set
-        if (task.startedAt && input.actualMinutes === undefined) {
-          const actualMins = Math.round((now - task.startedAt) / 60);
-          updates.push('actual_minutes = ?');
-          values.push(actualMins);
-        }
       }
     }
 
@@ -224,36 +295,6 @@ export class TaskRepository {
     await this.db.batch(statements);
   }
 
-  async carryOver(taskIds: string[], targetDate: string): Promise<Task[]> {
-    const now = nowUnix();
-    const tasks = await Promise.all(taskIds.map(id => this.findById(id)));
-    const validTasks = tasks.filter((t): t is Task => t !== null);
-
-    if (validTasks.length === 0) return [];
-
-    // Get max sort order for target date
-    const maxOrder = await this.getMaxSortOrder(validTasks[0].workspaceId, targetDate);
-
-    const statements = validTasks.map((task, index) =>
-      this.db
-        .prepare(
-          `UPDATE tasks SET
-           scheduled_date = ?,
-           sort_order = ?,
-           status = 'carried_over',
-           updated_at = ?
-           WHERE id = ?`
-        )
-        .bind(targetDate, maxOrder + 1 + index, now, task.id)
-    );
-
-    await this.db.batch(statements);
-
-    return Promise.all(taskIds.map(id => this.findById(id))).then(
-      results => results.filter((t): t is Task => t !== null)
-    );
-  }
-
   async delete(id: string): Promise<boolean> {
     const result = await this.db
       .prepare('DELETE FROM tasks WHERE id = ?')
@@ -266,5 +307,30 @@ export class TaskRepository {
   async belongsToWorkspace(taskId: string, workspaceId: string): Promise<boolean> {
     const task = await this.findById(taskId);
     return task?.workspaceId === workspaceId;
+  }
+
+  // Get repeating tasks for a workspace
+  async findRepeatingByWorkspaceId(workspaceId: string): Promise<Task[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM tasks
+         WHERE workspace_id = ?
+         AND repeat_pattern IS NOT NULL
+         ORDER BY scheduled_date ASC, sort_order ASC`
+      )
+      .bind(workspaceId)
+      .all<TaskRow>();
+
+    return (result.results ?? []).map(rowToTask);
+  }
+
+  // End repeat for a task (set repeat_end_date)
+  async endRepeat(id: string, endDate: string): Promise<Task | null> {
+    return this.update(id, { repeatEndDate: endDate });
+  }
+
+  // Remove repeat pattern entirely
+  async removeRepeat(id: string): Promise<Task | null> {
+    return this.update(id, { repeatPattern: null, repeatEndDate: null });
   }
 }

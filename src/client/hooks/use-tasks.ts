@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { taskApi } from '../services/api-client';
+import { taskApi, timeEntryApi } from '../services/api-client';
 import { useTaskStore } from '../stores/task-store';
 import type {
   CreateTaskInput,
   UpdateTaskInput,
   ReorderTasksInput,
-  CarryOverTasksInput,
 } from '../../shared/validators/index';
 
 export const taskKeys = {
@@ -16,7 +15,15 @@ export const taskKeys = {
   details: () => [...taskKeys.all, 'detail'] as const,
   detail: (workspaceId: string, taskId: string) =>
     [...taskKeys.details(), workspaceId, taskId] as const,
-  pending: (workspaceId: string) => [...taskKeys.all, 'pending', workspaceId] as const,
+};
+
+export const timeEntryKeys = {
+  all: ['timeEntries'] as const,
+  lists: () => [...timeEntryKeys.all, 'list'] as const,
+  list: (workspaceId: string, taskId: string) =>
+    [...timeEntryKeys.lists(), workspaceId, taskId] as const,
+  averageDuration: (workspaceId: string, taskId: string) =>
+    [...timeEntryKeys.all, 'averageDuration', workspaceId, taskId] as const,
 };
 
 export function useTasks(workspaceId: string, options?: { date?: string; status?: string }) {
@@ -74,14 +81,6 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     },
   });
 
-  const carryOverMutation = useMutation({
-    mutationFn: (input: CarryOverTasksInput) => taskApi.carryOver(workspaceId, input),
-    onSuccess: (tasks) => {
-      tasks.forEach((task) => updateTask(task.id, task));
-      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-    },
-  });
-
   return {
     tasks: listQuery.data ?? [],
     isLoading: listQuery.isLoading,
@@ -90,12 +89,10 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     update: updateMutation.mutate,
     delete: deleteMutation.mutate,
     reorder: reorderMutation.mutate,
-    carryOver: carryOverMutation.mutate,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isReordering: reorderMutation.isPending,
-    isCarryingOver: carryOverMutation.isPending,
   };
 }
 
@@ -107,14 +104,6 @@ export function useTask(workspaceId: string, taskId: string) {
   });
 }
 
-export function usePendingTasks(workspaceId: string) {
-  return useQuery({
-    queryKey: taskKeys.pending(workspaceId),
-    queryFn: () => taskApi.getPending(workspaceId),
-    enabled: Boolean(workspaceId),
-  });
-}
-
 export function useTasksByShareToken(
   shareToken: string,
   options?: { date?: string; status?: string }
@@ -123,5 +112,57 @@ export function useTasksByShareToken(
     queryKey: ['shared-tasks', shareToken, options] as const,
     queryFn: () => taskApi.listByShareToken(shareToken, options),
     enabled: Boolean(shareToken),
+  });
+}
+
+// Time Entry Hooks
+export function useTimeEntries(workspaceId: string, taskId: string) {
+  const queryClient = useQueryClient();
+
+  const listQuery = useQuery({
+    queryKey: timeEntryKeys.list(workspaceId, taskId),
+    queryFn: () => timeEntryApi.list(workspaceId, taskId),
+    enabled: Boolean(workspaceId) && Boolean(taskId),
+  });
+
+  const startMutation = useMutation({
+    mutationFn: () => timeEntryApi.start(workspaceId, taskId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: timeEntryKeys.list(workspaceId, taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+    },
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: (timeEntryId: string) => timeEntryApi.stop(workspaceId, taskId, timeEntryId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: timeEntryKeys.list(workspaceId, taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+    },
+  });
+
+  return {
+    timeEntries: listQuery.data ?? [],
+    isLoading: listQuery.isLoading,
+    start: startMutation.mutate,
+    stop: stopMutation.mutate,
+    isStarting: startMutation.isPending,
+    isStopping: stopMutation.isPending,
+  };
+}
+
+export function useAverageDuration(workspaceId: string, taskId: string) {
+  return useQuery({
+    queryKey: timeEntryKeys.averageDuration(workspaceId, taskId),
+    queryFn: () => timeEntryApi.getAverageDuration(workspaceId, taskId),
+    enabled: Boolean(workspaceId) && Boolean(taskId),
+  });
+}
+
+export function useAverageDurationByTitle(workspaceId: string, title: string | undefined) {
+  return useQuery({
+    queryKey: ['averageDuration', 'byTitle', workspaceId, title] as const,
+    queryFn: () => timeEntryApi.getAverageDurationByTitle(workspaceId, title!),
+    enabled: Boolean(workspaceId) && Boolean(title),
   });
 }

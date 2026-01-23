@@ -18,17 +18,26 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Task } from '../../../shared/types/index';
+import type { Task, TimeEntry } from '../../../shared/types/index';
 import { TaskCard } from './TaskCard';
 
 interface SortableTaskItemProps {
   task: Task;
+  activeTimeEntry?: TimeEntry | null;
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
-  onStatusChange?: (taskId: string, status: Task['status']) => void;
+  onStartTimeEntry?: (taskId: string) => void;
+  onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
 }
 
-function SortableTaskItem({ task, onEdit, onDelete, onStatusChange }: SortableTaskItemProps) {
+function SortableTaskItem({
+  task,
+  activeTimeEntry,
+  onEdit,
+  onDelete,
+  onStartTimeEntry,
+  onStopTimeEntry,
+}: SortableTaskItemProps) {
   const {
     attributes,
     listeners,
@@ -47,9 +56,11 @@ function SortableTaskItem({ task, onEdit, onDelete, onStatusChange }: SortableTa
     <div ref={setNodeRef} style={style}>
       <TaskCard
         task={task}
+        activeTimeEntry={activeTimeEntry}
         onEdit={onEdit}
         onDelete={onDelete}
-        onStatusChange={onStatusChange}
+        onStartTimeEntry={onStartTimeEntry}
+        onStopTimeEntry={onStopTimeEntry}
         isDragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
@@ -59,22 +70,48 @@ function SortableTaskItem({ task, onEdit, onDelete, onStatusChange }: SortableTa
 
 interface SortableTaskListProps {
   tasks: Task[];
+  activeTimeEntries?: Map<string, TimeEntry>;
   onEditTask?: (task: Task) => void;
   onDeleteTask?: (taskId: string) => void;
-  onStatusChange?: (taskId: string, status: Task['status']) => void;
+  onStartTimeEntry?: (taskId: string) => void;
+  onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   onReorder?: (taskIds: string[]) => void;
   emptyMessage?: string;
 }
 
 export function SortableTaskList({
   tasks,
+  activeTimeEntries,
   onEditTask,
   onDeleteTask,
-  onStatusChange,
+  onStartTimeEntry,
+  onStopTimeEntry,
   onReorder,
   emptyMessage = 'タスクがありません',
 }: SortableTaskListProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Local state for immediate visual feedback during drag
+  const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
+  // Track if we have a pending reorder to prevent external updates
+  const [isPendingReorder, setIsPendingReorder] = useState(false);
+
+  // Determine which tasks to display
+  const tasksToDisplay = useMemo(() => {
+    if (isPendingReorder) {
+      return localTasks;
+    }
+    return tasks;
+  }, [isPendingReorder, localTasks, tasks]);
+
+  // Sync local tasks when props change and not pending
+  const propsTaskIds = tasks.map((t) => t.id).join(',');
+  const localTaskIds = localTasks.map((t) => t.id).join(',');
+  const shouldSync = !isPendingReorder && propsTaskIds !== localTaskIds && tasks.length !== localTasks.length;
+
+  // Keep local tasks in sync with props when we're not in pending state
+  if (shouldSync) {
+    void Promise.resolve().then(() => setLocalTasks(tasks));
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -88,8 +125,8 @@ export function SortableTaskList({
   );
 
   const activeTask = useMemo(
-    () => tasks.find((t) => t.id === activeId),
-    [tasks, activeId]
+    () => tasksToDisplay.find((t) => t.id === activeId),
+    [tasksToDisplay, activeId]
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -103,24 +140,35 @@ export function SortableTaskList({
       setActiveId(null);
 
       if (over && active.id !== over.id) {
-        const oldIndex = tasks.findIndex((t) => t.id === active.id);
-        const newIndex = tasks.findIndex((t) => t.id === over.id);
+        const oldIndex = tasksToDisplay.findIndex((t) => t.id === active.id);
+        const newIndex = tasksToDisplay.findIndex((t) => t.id === over.id);
 
         if (oldIndex !== -1 && newIndex !== -1) {
-          const newTasks = arrayMove(tasks, oldIndex, newIndex);
+          const newTasks = arrayMove(tasksToDisplay, oldIndex, newIndex);
+
+          // Update local state immediately for visual feedback
+          setLocalTasks(newTasks);
+          setIsPendingReorder(true);
+
           const taskIds = newTasks.map((t) => t.id);
           onReorder?.(taskIds);
+
+          // Reset pending state after a short delay to allow server sync
+          setTimeout(() => {
+            setIsPendingReorder(false);
+          }, 500);
         }
       }
     },
-    [tasks, onReorder]
+    [tasksToDisplay, onReorder]
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
+    setIsPendingReorder(false);
   }, []);
 
-  if (tasks.length === 0) {
+  if (tasksToDisplay.length === 0) {
     return (
       <div className="text-center py-12">
         <svg
@@ -149,15 +197,17 @@ export function SortableTaskList({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={tasksToDisplay.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-3">
-          {tasks.map((task) => (
+          {tasksToDisplay.map((task) => (
             <SortableTaskItem
               key={task.id}
               task={task}
+              activeTimeEntry={activeTimeEntries?.get(task.id)}
               onEdit={onEditTask}
               onDelete={onDeleteTask}
-              onStatusChange={onStatusChange}
+              onStartTimeEntry={onStartTimeEntry}
+              onStopTimeEntry={onStopTimeEntry}
             />
           ))}
         </div>
@@ -166,7 +216,11 @@ export function SortableTaskList({
       <DragOverlay>
         {activeTask ? (
           <div className="opacity-80">
-            <TaskCard task={activeTask} isDragging />
+            <TaskCard
+              task={activeTask}
+              activeTimeEntry={activeTimeEntries?.get(activeTask.id)}
+              isDragging
+            />
           </div>
         ) : null}
       </DragOverlay>

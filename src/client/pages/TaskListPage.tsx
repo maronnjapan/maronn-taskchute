@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/use-auth';
 import { useWorkspaces } from '../hooks/use-workspaces';
-import { useTasks, usePendingTasks } from '../hooks/use-tasks';
+import { useTasks, useAverageDurationByTitle } from '../hooks/use-tasks';
 import { useWorkspaceStore } from '../stores/workspace-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
@@ -13,11 +13,11 @@ import {
   DateNavigator,
   WorkspaceSelector,
   WorkspaceForm,
-  CarryOverDialog,
   TimeSummary,
   ShareLinkDisplay,
 } from '../components/features';
-import type { Task } from '../../shared/types/index';
+import { timeEntryApi } from '../services/api-client';
+import type { Task, TimeEntry } from '../../shared/types/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
 
 export function TaskListPage() {
@@ -28,13 +28,14 @@ export function TaskListPage() {
   const {
     isTaskFormOpen,
     isWorkspaceFormOpen,
-    isCarryOverDialogOpen,
     editingTaskId,
     setWorkspaceFormOpen,
-    setCarryOverDialogOpen,
     openTaskForm,
     closeTaskForm,
   } = useUiStore();
+
+  // Track active time entries per task
+  const [activeTimeEntries, setActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
 
   // Auto-select first workspace if none selected
   const activeWorkspaceId = useMemo(() => {
@@ -60,19 +61,30 @@ export function TaskListPage() {
     update: updateTask,
     delete: deleteTask,
     reorder,
-    carryOver,
     isCreating,
     isUpdating,
-    isCarryingOver,
   } = useTasks(activeWorkspaceId ?? '', { date: selectedDate });
-
-  const { data: pendingTasks = [] } = usePendingTasks(activeWorkspaceId ?? '');
 
   // Get the task being edited
   const editingTask = useMemo(
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
     [editingTaskId, tasks]
   );
+
+  // Fetch average duration for repeating tasks to use as default estimated time
+  const { data: averageDuration } = useAverageDurationByTitle(
+    activeWorkspaceId ?? '',
+    editingTask?.repeatPattern ? editingTask.title : undefined
+  );
+
+  // Calculate default estimated minutes for task form
+  const defaultEstimatedMinutes = useMemo(() => {
+    // Only use average duration for repeating tasks that don't have an estimated time set
+    if (editingTask?.repeatPattern && !editingTask.estimatedMinutes && averageDuration) {
+      return Math.round(averageDuration);
+    }
+    return undefined;
+  }, [editingTask, averageDuration]);
 
   // Handlers
   const handleCreateWorkspace = useCallback(
@@ -117,21 +129,38 @@ export function TaskListPage() {
     [deleteTask]
   );
 
-  const handleStatusChange = useCallback(
-    (taskId: string, status: Task['status']) => {
-      updateTask({ taskId, input: { status } });
+  const handleStartTimeEntry = useCallback(
+    async (taskId: string) => {
+      if (!activeWorkspaceId) return;
+      try {
+        const timeEntry = await timeEntryApi.start(activeWorkspaceId, taskId);
+        setActiveTimeEntries((prev) => {
+          const next = new Map(prev);
+          next.set(taskId, timeEntry);
+          return next;
+        });
+      } catch (error) {
+        console.error('Failed to start time entry:', error);
+      }
     },
-    [updateTask]
+    [activeWorkspaceId]
   );
 
-  const handleCarryOver = useCallback(
-    (taskIds: string[], targetDate: string) => {
-      carryOver(
-        { taskIds, targetDate },
-        { onSuccess: () => setCarryOverDialogOpen(false) }
-      );
+  const handleStopTimeEntry = useCallback(
+    async (taskId: string, timeEntryId: string) => {
+      if (!activeWorkspaceId) return;
+      try {
+        await timeEntryApi.stop(activeWorkspaceId, taskId, timeEntryId);
+        setActiveTimeEntries((prev) => {
+          const next = new Map(prev);
+          next.delete(taskId);
+          return next;
+        });
+      } catch (error) {
+        console.error('Failed to stop time entry:', error);
+      }
     },
-    [carryOver, setCarryOverDialogOpen]
+    [activeWorkspaceId]
   );
 
   // Loading state
@@ -205,11 +234,6 @@ export function TaskListPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button onClick={() => openTaskForm()}>新規タスク</Button>
-            {pendingTasks.length > 0 && (
-              <Button variant="secondary" onClick={() => setCarryOverDialogOpen(true)}>
-                繰り越し ({pendingTasks.length})
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -227,9 +251,11 @@ export function TaskListPage() {
       ) : (
         <SortableTaskList
           tasks={tasks}
+          activeTimeEntries={activeTimeEntries}
           onEditTask={handleEditTask}
           onDeleteTask={handleDeleteTask}
-          onStatusChange={handleStatusChange}
+          onStartTimeEntry={handleStartTimeEntry}
+          onStopTimeEntry={handleStopTimeEntry}
           onReorder={(taskIds) => reorder({ taskIds })}
           emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
         />
@@ -254,6 +280,7 @@ export function TaskListPage() {
           onCancel={closeTaskForm}
           isSubmitting={isCreating || isUpdating}
           defaultDate={selectedDate}
+          defaultEstimatedMinutes={defaultEstimatedMinutes}
         />
       </Dialog>
 
@@ -269,15 +296,6 @@ export function TaskListPage() {
           isSubmitting={isCreatingWorkspace}
         />
       </Dialog>
-
-      {/* Carry over dialog */}
-      <CarryOverDialog
-        isOpen={isCarryOverDialogOpen}
-        onClose={() => setCarryOverDialogOpen(false)}
-        pendingTasks={pendingTasks}
-        onCarryOver={handleCarryOver}
-        isLoading={isCarryingOver}
-      />
     </div>
   );
 }

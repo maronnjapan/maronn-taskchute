@@ -16,12 +16,13 @@ export type {
   CreateTaskInput,
   UpdateTaskInput,
   ReorderTasksInput,
-  CarryOverTasksInput,
   CreateWorkspaceInput,
   UpdateWorkspaceInput,
   CreateTaskCommentInput,
   UpdateTaskCommentInput,
   TaskQueryParams,
+  StartTimeEntryInput,
+  StopTimeEntryInput,
 } from '../validators/index';
 
 // Re-export schemas for validation
@@ -29,13 +30,15 @@ export {
   createTaskSchema,
   updateTaskSchema,
   reorderTasksSchema,
-  carryOverTasksSchema,
   createWorkspaceSchema,
   updateWorkspaceSchema,
   createTaskCommentSchema,
   updateTaskCommentSchema,
   taskQuerySchema,
   taskStatusSchema,
+  repeatPatternSchema,
+  startTimeEntrySchema,
+  stopTimeEntrySchema,
 } from '../validators/index';
 
 // Re-export utils

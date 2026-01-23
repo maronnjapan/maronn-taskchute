@@ -19,7 +19,8 @@ export interface Workspace {
 }
 
 // Task
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'carried_over';
+export type TaskStatus = 'pending' | 'in_progress';
+export type RepeatPattern = 'daily' | 'weekdays' | 'weekly' | 'monthly';
 
 export interface Task {
   id: string;
@@ -31,8 +32,20 @@ export interface Task {
   estimatedMinutes?: number;
   actualMinutes?: number;
   startedAt?: number;
-  completedAt?: number;
   status: TaskStatus;
+  repeatPattern?: RepeatPattern;
+  repeatEndDate?: string; // YYYY-MM-DD
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Time Entry (for multiple time recordings per task)
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  startedAt: number;
+  endedAt?: number;
+  durationMinutes?: number;
   createdAt: number;
   updatedAt: number;
 }
