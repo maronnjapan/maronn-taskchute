@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { AuthService } from '../services/auth-service';
 import { UserRepository } from '../repositories/user-repository';
 import { SessionRepository } from '../repositories/session-repository';
-import { generateId } from '../../shared/utils/index';
+import { generateId, generateCodeVerifier, generateCodeChallenge } from '../../shared/utils/index';
 import type { User } from '../../shared/types/index';
 
 interface Bindings {
@@ -11,6 +11,7 @@ interface Bindings {
   AUTH0_CLIENT_ID: string;
   AUTH0_CLIENT_SECRET: string;
   AUTH0_CALLBACK_URL: string;
+  AUTH0_AUDIENCE: string;
 }
 
 interface Variables {
@@ -28,18 +29,26 @@ function getAuthService(c: { env: Bindings }) {
     clientId: c.env.AUTH0_CLIENT_ID,
     clientSecret: c.env.AUTH0_CLIENT_SECRET,
     callbackUrl: c.env.AUTH0_CALLBACK_URL,
+    audience: c.env.AUTH0_AUDIENCE,
   });
 }
 
 // GET /auth/login - Redirect to Auth0 login
-auth.get('/login', (c) => {
+auth.get('/login', async (c) => {
   const authService = getAuthService(c);
   const state = generateId();
 
-  // Store state in cookie for CSRF protection
-  c.header('Set-Cookie', `auth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+  // Generate PKCE code verifier and challenge
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  const loginUrl = authService.getLoginUrl(state);
+  // Store state and code_verifier in cookies for CSRF protection and PKCE
+  c.header('Set-Cookie', `auth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+  c.header('Set-Cookie', `code_verifier=${codeVerifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
+    append: true,
+  });
+
+  const loginUrl = authService.getLoginUrl(state, codeChallenge);
   return c.redirect(loginUrl);
 });
 
@@ -65,19 +74,27 @@ auth.get('/callback', async (c) => {
   // Verify state (CSRF protection)
   const cookie = c.req.header('Cookie');
   const storedState = cookie?.match(/auth_state=([^;]+)/)?.[1];
+  const codeVerifier = cookie?.match(/code_verifier=([^;]+)/)?.[1];
 
   if (!storedState || storedState !== state) {
     return c.redirect('/?error=invalid_state');
   }
 
+  if (!codeVerifier) {
+    return c.redirect('/?error=missing_code_verifier');
+  }
+
   try {
-    const { session } = await authService.handleCallback(code);
+    const { session } = await authService.handleCallback(code, codeVerifier);
 
     // Set session cookie
     authService.setSessionCookie(c, session.id);
 
-    // Clear state cookie
+    // Clear state and code_verifier cookies
     c.header('Set-Cookie', 'auth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
+      append: true,
+    });
+    c.header('Set-Cookie', 'code_verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
       append: true,
     });
 
