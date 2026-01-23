@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useWorkspaceByShareToken, useTasksByShareToken } from '../hooks';
+import { useWorkspaceByShareToken, useTasksByShareToken, useAverageDurationByTitle } from '../hooks';
 import { useTaskStore } from '../stores/task-store';
 import { taskApi, timeEntryApi } from '../services/api-client';
 import { Button } from '../components/ui/Button';
@@ -33,6 +33,20 @@ export function SharedWorkspacePage() {
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
     [editingTaskId, tasks]
   );
+
+  // Fetch average duration for repeating tasks to use as default estimated time
+  const { data: averageDuration } = useAverageDurationByTitle(
+    workspace?.id ?? '',
+    editingTask?.repeatPattern ? editingTask.title : undefined
+  );
+
+  // Calculate default estimated minutes for task form
+  const defaultEstimatedMinutes = useMemo(() => {
+    if (editingTask?.repeatPattern && !editingTask.estimatedMinutes && averageDuration) {
+      return Math.round(averageDuration);
+    }
+    return undefined;
+  }, [editingTask, averageDuration]);
 
   const openTaskForm = useCallback((taskId?: string) => {
     setEditingTaskId(taskId ?? null);
@@ -194,6 +208,7 @@ export function SharedWorkspacePage() {
           onCancel={closeTaskForm}
           isSubmitting={isSubmitting}
           defaultDate={selectedDate}
+          defaultEstimatedMinutes={defaultEstimatedMinutes}
         />
       </Dialog>
     </div>

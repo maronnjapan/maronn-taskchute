@@ -228,6 +228,16 @@ export const timeEntryApi = {
     const result = await handleResponse<ApiResponse<{ averageDuration: number | null }>>(response);
     return result.data.averageDuration;
   },
+
+  async getAverageDurationByTitle(workspaceId: string, title: string): Promise<number | null> {
+    const params = new URLSearchParams({ title });
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/average-duration?${params.toString()}`,
+      { credentials: 'include' }
+    );
+    const result = await handleResponse<ApiResponse<{ averageDuration: number | null }>>(response);
+    return result.data.averageDuration;
+  },
 };
 
 // Comment API

@@ -158,3 +158,11 @@ export function useAverageDuration(workspaceId: string, taskId: string) {
     enabled: Boolean(workspaceId) && Boolean(taskId),
   });
 }
+
+export function useAverageDurationByTitle(workspaceId: string, title: string | undefined) {
+  return useQuery({
+    queryKey: ['averageDuration', 'byTitle', workspaceId, title] as const,
+    queryFn: () => timeEntryApi.getAverageDurationByTitle(workspaceId, title!),
+    enabled: Boolean(workspaceId) && Boolean(title),
+  });
+}

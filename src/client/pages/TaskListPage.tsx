@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/use-auth';
 import { useWorkspaces } from '../hooks/use-workspaces';
-import { useTasks } from '../hooks/use-tasks';
+import { useTasks, useAverageDurationByTitle } from '../hooks/use-tasks';
 import { useWorkspaceStore } from '../stores/workspace-store';
 import { useTaskStore } from '../stores/task-store';
 import { useUiStore } from '../stores/ui-store';
@@ -70,6 +70,21 @@ export function TaskListPage() {
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
     [editingTaskId, tasks]
   );
+
+  // Fetch average duration for repeating tasks to use as default estimated time
+  const { data: averageDuration } = useAverageDurationByTitle(
+    activeWorkspaceId ?? '',
+    editingTask?.repeatPattern ? editingTask.title : undefined
+  );
+
+  // Calculate default estimated minutes for task form
+  const defaultEstimatedMinutes = useMemo(() => {
+    // Only use average duration for repeating tasks that don't have an estimated time set
+    if (editingTask?.repeatPattern && !editingTask.estimatedMinutes && averageDuration) {
+      return Math.round(averageDuration);
+    }
+    return undefined;
+  }, [editingTask, averageDuration]);
 
   // Handlers
   const handleCreateWorkspace = useCallback(
@@ -265,6 +280,7 @@ export function TaskListPage() {
           onCancel={closeTaskForm}
           isSubmitting={isCreating || isUpdating}
           defaultDate={selectedDate}
+          defaultEstimatedMinutes={defaultEstimatedMinutes}
         />
       </Dialog>
 

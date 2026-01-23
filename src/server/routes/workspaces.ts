@@ -349,4 +349,25 @@ workspaces.get('/:id/tasks/:taskId/average-duration', async (c) => {
   return c.json({ data: { averageDuration } });
 });
 
+// GET /api/workspaces/:id/average-duration - Get average duration by title (for repeating tasks)
+workspaces.get('/:id/average-duration', async (c) => {
+  const workspaceId = c.req.param('id');
+  const title = c.req.query('title');
+  const userId = c.get('userId');
+  const { workspaceService, timeEntryService } = getServices(c.env.DB);
+
+  if (!title) {
+    return c.json({ data: { averageDuration: null } });
+  }
+
+  // Verify workspace access
+  const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+  if (!canAccess) {
+    throw forbiddenError('Access denied');
+  }
+
+  const averageDuration = await timeEntryService.getAverageDuration(workspaceId, title);
+  return c.json({ data: { averageDuration } });
+});
+
 export default workspaces;
