@@ -6,6 +6,7 @@ import type {
   UpdateTaskInput,
   ReorderTasksInput,
 } from '../../shared/validators/index';
+import type { Task, TimeEntry } from '../../shared/types/index';
 
 export const taskKeys = {
   all: ['tasks'] as const,

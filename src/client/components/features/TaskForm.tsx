@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { createTaskSchema, repeatPatternSchema } from '../../../shared/validators/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../../shared/validators/index';
 import type { Task, RepeatPattern } from '../../../shared/types/index';
@@ -11,7 +11,7 @@ import { getTodayString } from '../../../shared/utils/index';
 
 // Extended form schema with repeat pattern
 const taskFormSchema = createTaskSchema.extend({
-  repeatPattern: repeatPatternSchema.nullable().optional(),
+  repeatPattern: repeatPatternSchema.nullable().optional().or(z.literal('')),
 });
 
 type TaskFormFields = z.infer<typeof taskFormSchema>;
