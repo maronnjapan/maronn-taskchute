@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useWorkspaceByShareToken, useTasksByShareToken, useAverageDurationByTitle } from '../hooks';
+import { useWorkspaceByShareToken, useTasksByShareToken, useAverageDurationByTitle, useActiveTimeEntries } from '../hooks';
 import { useTaskStore } from '../stores/task-store';
 import { taskApi, timeEntryApi } from '../services/api-client';
 import { Button } from '../components/ui/Button';
@@ -15,7 +15,7 @@ export function SharedWorkspacePage() {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTimeEntries, setActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
+  const [manualActiveTimeEntries, setManualActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
 
   const {
     data: workspace,
@@ -28,6 +28,9 @@ export function SharedWorkspacePage() {
     isLoading: isTasksLoading,
     refetch: refetchTasks,
   } = useTasksByShareToken(shareToken ?? '', { date: selectedDate });
+
+  // Fetch active time entries from server
+  const { data: serverActiveTimeEntries } = useActiveTimeEntries(workspace?.id ?? '', tasks);
 
   const editingTask = useMemo(
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
@@ -47,6 +50,22 @@ export function SharedWorkspacePage() {
     }
     return undefined;
   }, [editingTask, averageDuration]);
+
+  // Merge server and manual active time entries
+  const activeTimeEntries = useMemo(() => {
+    const merged = new Map<string, TimeEntry>();
+    // Start with server data
+    if (serverActiveTimeEntries) {
+      serverActiveTimeEntries.forEach((entry, taskId) => {
+        merged.set(taskId, entry);
+      });
+    }
+    // Override with manual updates
+    manualActiveTimeEntries.forEach((entry, taskId) => {
+      merged.set(taskId, entry);
+    });
+    return merged;
+  }, [serverActiveTimeEntries, manualActiveTimeEntries]);
 
   const openTaskForm = useCallback((taskId?: string) => {
     setEditingTaskId(taskId ?? null);
@@ -105,7 +124,7 @@ export function SharedWorkspacePage() {
 
       try {
         const timeEntry = await timeEntryApi.start(workspace.id, taskId);
-        setActiveTimeEntries((prev) => new Map(prev).set(taskId, timeEntry));
+        setManualActiveTimeEntries((prev) => new Map(prev).set(taskId, timeEntry));
         void refetchTasks();
       } catch (error) {
         console.error('Failed to start time entry:', error);
@@ -120,7 +139,7 @@ export function SharedWorkspacePage() {
 
       try {
         await timeEntryApi.stop(workspace.id, taskId, timeEntryId);
-        setActiveTimeEntries((prev) => {
+        setManualActiveTimeEntries((prev) => {
           const next = new Map(prev);
           next.delete(taskId);
           return next;

@@ -1,6 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
+import { z } from 'zod';
 import { createTaskSchema, repeatPatternSchema } from '../../../shared/validators/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../../shared/validators/index';
 import type { Task, RepeatPattern } from '../../../shared/types/index';
@@ -11,7 +11,7 @@ import { getTodayString } from '../../../shared/utils/index';
 
 // Extended form schema with repeat pattern
 const taskFormSchema = createTaskSchema.extend({
-  repeatPattern: repeatPatternSchema.nullable().optional(),
+  repeatPattern: repeatPatternSchema.nullable().optional().or(z.literal('')),
 });
 
 type TaskFormFields = z.infer<typeof taskFormSchema>;
@@ -55,7 +55,7 @@ export function TaskForm({
           title: task.title,
           description: task.description ?? '',
           scheduledDate: task.scheduledDate,
-          estimatedMinutes: task.estimatedMinutes,
+          estimatedMinutes: defaultEstimatedMinutes ?? task.estimatedMinutes,
           repeatPattern: task.repeatPattern ?? null,
         }
       : {
@@ -73,8 +73,8 @@ export function TaskForm({
     const cleanData: CreateTaskInput | UpdateTaskInput = {
       ...data,
       description: data.description === '' ? undefined : data.description,
-      estimatedMinutes: data.estimatedMinutes === 0 ? undefined : data.estimatedMinutes,
-      repeatPattern: data.repeatPattern ?? undefined,
+      estimatedMinutes: Number.isNaN(data.estimatedMinutes) ? undefined : data.estimatedMinutes,
+      repeatPattern: data.repeatPattern === '' || data.repeatPattern === null ? undefined : data.repeatPattern,
     };
     onSubmit(cleanData);
   };

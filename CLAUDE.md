@@ -549,13 +549,29 @@ describe('TaskService', () => {
 
 #### コミット前チェック
 
+**重要**: すべての作業完了前に、以下のチェックを**必ず実行**し、エラーがないことを確認してから完了とすること。
+
 ```bash
-# 全テスト実行（CI/pre-commit hook で実行）
+# 1. 型チェック（必須）
+npm run typecheck
+# エラーが0件であることを確認
+
+# 2. Lintチェック（必須）
+npm run lint
+# エラーが0件であることを確認（警告は許容される場合がある）
+
+# 3. 全テスト実行（CI/pre-commit hook で実行）
 npm run test
 
-# カバレッジ確認
+# 4. カバレッジ確認
 npm run test:coverage
 ```
+
+**チェックリスト**:
+- [ ] `npm run typecheck` でエラーなし
+- [ ] `npm run lint` でエラーなし
+- [ ] `npm run test` で全テスト成功
+- [ ] カバレッジが目標値を満たしている
 
 #### カバレッジ目標
 

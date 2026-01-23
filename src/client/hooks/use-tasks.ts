@@ -6,6 +6,7 @@ import type {
   UpdateTaskInput,
   ReorderTasksInput,
 } from '../../shared/validators/index';
+import type { Task, TimeEntry } from '../../shared/types/index';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -72,7 +73,11 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
       // Optimistic update
       reorderTasks(input.taskIds);
     },
-    onSuccess: () => {
+    onSuccess: (updatedTasks) => {
+      // Update store with the server response
+      updatedTasks.forEach(task => {
+        updateTask(task.id, task);
+      });
       void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
     onError: () => {
@@ -118,6 +123,7 @@ export function useTasksByShareToken(
 // Time Entry Hooks
 export function useTimeEntries(workspaceId: string, taskId: string) {
   const queryClient = useQueryClient();
+  const { updateTask } = useTaskStore();
 
   const listQuery = useQuery({
     queryKey: timeEntryKeys.list(workspaceId, taskId),
@@ -135,7 +141,14 @@ export function useTimeEntries(workspaceId: string, taskId: string) {
 
   const stopMutation = useMutation({
     mutationFn: (timeEntryId: string) => timeEntryApi.stop(workspaceId, taskId, timeEntryId),
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Immediately refetch the task to get updated actualMinutes
+      try {
+        const updatedTask = await taskApi.get(workspaceId, taskId);
+        updateTask(updatedTask.id, updatedTask);
+      } catch (error) {
+        console.error('Failed to refetch task after stopping time entry:', error);
+      }
       void queryClient.invalidateQueries({ queryKey: timeEntryKeys.list(workspaceId, taskId) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
     },
@@ -164,5 +177,39 @@ export function useAverageDurationByTitle(workspaceId: string, title: string | u
     queryKey: ['averageDuration', 'byTitle', workspaceId, title] as const,
     queryFn: () => timeEntryApi.getAverageDurationByTitle(workspaceId, title!),
     enabled: Boolean(workspaceId) && Boolean(title),
+  });
+}
+
+// Hook to fetch all active time entries for a workspace
+export function useActiveTimeEntries(workspaceId: string, tasks: Task[]) {
+  return useQuery({
+    queryKey: ['activeTimeEntries', workspaceId, tasks.map(t => t.id).join(',')] as const,
+    queryFn: async () => {
+      if (tasks.length === 0) {
+        return new Map<string, TimeEntry>();
+      }
+
+      const activeEntries = new Map<string, TimeEntry>();
+
+      // Fetch time entries for all tasks in parallel
+      await Promise.all(
+        tasks.map(async (task) => {
+          try {
+            const entries = await timeEntryApi.list(workspaceId, task.id);
+            // Find active entry (endedAt is null)
+            const activeEntry = entries.find((entry) => !entry.endedAt);
+            if (activeEntry) {
+              activeEntries.set(task.id, activeEntry);
+            }
+          } catch (error) {
+            console.error(`Failed to fetch time entries for task ${task.id}:`, error);
+          }
+        })
+      );
+
+      return activeEntries;
+    },
+    enabled: Boolean(workspaceId) && tasks.length > 0,
+    staleTime: 0, // Always fetch fresh data to ensure we have the latest state
   });
 }

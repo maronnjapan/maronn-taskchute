@@ -106,7 +106,7 @@ export function SortableTaskList({
   // Sync local tasks when props change and not pending
   const propsTaskIds = tasks.map((t) => t.id).join(',');
   const localTaskIds = localTasks.map((t) => t.id).join(',');
-  const shouldSync = !isPendingReorder && propsTaskIds !== localTaskIds && tasks.length !== localTasks.length;
+  const shouldSync = !isPendingReorder && propsTaskIds !== localTaskIds;
 
   // Keep local tasks in sync with props when we're not in pending state
   if (shouldSync) {
