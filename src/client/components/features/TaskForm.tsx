@@ -1,16 +1,28 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { z } from 'zod';
-import { createTaskSchema } from '../../../shared/validators/index';
+import { z } from 'zod';
+import { createTaskSchema, repeatPatternSchema } from '../../../shared/validators/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../../shared/validators/index';
-import type { Task } from '../../../shared/types/index';
+import type { Task, RepeatPattern } from '../../../shared/types/index';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { TextArea } from '../ui/TextArea';
 import { getTodayString } from '../../../shared/utils/index';
 
-// Form fields type (subset of CreateTaskInput)
-type TaskFormFields = z.infer<typeof createTaskSchema>;
+// Extended form schema with repeat pattern
+const taskFormSchema = createTaskSchema.extend({
+  repeatPattern: repeatPatternSchema.nullable().optional(),
+});
+
+type TaskFormFields = z.infer<typeof taskFormSchema>;
+
+const repeatPatternOptions: { value: RepeatPattern | ''; label: string }[] = [
+  { value: '', label: '繰り返しなし' },
+  { value: 'daily', label: '毎日' },
+  { value: 'weekdays', label: '平日のみ' },
+  { value: 'weekly', label: '毎週' },
+  { value: 'monthly', label: '毎月' },
+];
 
 interface TaskFormProps {
   task?: Task;
@@ -18,37 +30,51 @@ interface TaskFormProps {
   onCancel: () => void;
   isSubmitting?: boolean;
   defaultDate?: string;
+  defaultEstimatedMinutes?: number;
 }
 
-export function TaskForm({ task, onSubmit, onCancel, isSubmitting = false, defaultDate }: TaskFormProps) {
+export function TaskForm({
+  task,
+  onSubmit,
+  onCancel,
+  isSubmitting = false,
+  defaultDate,
+  defaultEstimatedMinutes,
+}: TaskFormProps) {
   const isEditing = Boolean(task);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
   } = useForm<TaskFormFields>({
-    resolver: zodResolver(createTaskSchema),
+    resolver: zodResolver(taskFormSchema),
     defaultValues: task
       ? {
           title: task.title,
           description: task.description ?? '',
           scheduledDate: task.scheduledDate,
           estimatedMinutes: task.estimatedMinutes,
+          repeatPattern: task.repeatPattern ?? null,
         }
       : {
           title: '',
           description: '',
           scheduledDate: defaultDate ?? getTodayString(),
-          estimatedMinutes: undefined,
+          estimatedMinutes: defaultEstimatedMinutes,
+          repeatPattern: null,
         },
   });
 
+  const selectedRepeatPattern = watch('repeatPattern');
+
   const handleFormSubmit = (data: TaskFormFields) => {
-    const cleanData = {
+    const cleanData: CreateTaskInput | UpdateTaskInput = {
       ...data,
       description: data.description === '' ? undefined : data.description,
       estimatedMinutes: data.estimatedMinutes === 0 ? undefined : data.estimatedMinutes,
+      repeatPattern: data.repeatPattern || undefined,
     };
     onSubmit(cleanData);
   };
@@ -88,6 +114,28 @@ export function TaskForm({ task, onSubmit, onCancel, isSubmitting = false, defau
           min={0}
           max={1440}
         />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          繰り返し設定
+        </label>
+        <select
+          {...register('repeatPattern')}
+          className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
+                     focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        >
+          {repeatPatternOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        {selectedRepeatPattern && (
+          <p className="mt-1 text-xs text-gray-500">
+            この設定により、タスクは{repeatPatternOptions.find(o => o.value === selectedRepeatPattern)?.label}反映されます。
+          </p>
+        )}
       </div>
 
       <div className="flex justify-end gap-2 pt-4">

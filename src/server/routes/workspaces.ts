@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { WorkspaceService } from '../services/workspace-service';
 import { TaskService } from '../services/task-service';
+import { TimeEntryService } from '../services/time-entry-service';
 import { WorkspaceRepository } from '../repositories/workspace-repository';
 import { TaskRepository } from '../repositories/task-repository';
+import { TimeEntryRepository } from '../repositories/time-entry-repository';
 import { requireAuth } from '../middleware/auth';
 import { notFoundError, forbiddenError } from '../middleware/error-handler';
 import {
@@ -12,7 +14,6 @@ import {
   createTaskSchema,
   updateTaskSchema,
   reorderTasksSchema,
-  carryOverTasksSchema,
 } from '../../shared/validators/index';
 import type { User, TaskStatus } from '../../shared/types/index';
 
@@ -30,9 +31,11 @@ const workspaces = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 function getServices(db: D1Database) {
   const workspaceRepo = new WorkspaceRepository(db);
   const taskRepo = new TaskRepository(db);
+  const timeEntryRepo = new TimeEntryRepository(db);
   return {
     workspaceService: new WorkspaceService(workspaceRepo),
     taskService: new TaskService(taskRepo),
+    timeEntryService: new TimeEntryService(timeEntryRepo, taskRepo),
   };
 }
 
@@ -248,12 +251,14 @@ workspaces.post('/:id/tasks/reorder', zValidator('json', reorderTasksSchema), as
   return c.json({ data: tasks });
 });
 
-// POST /api/workspaces/:id/tasks/carry-over - Carry over tasks
-workspaces.post('/:id/tasks/carry-over', zValidator('json', carryOverTasksSchema), async (c) => {
+// ============ Time Entry routes ============
+
+// POST /api/workspaces/:id/tasks/:taskId/time-entries/start - Start time tracking
+workspaces.post('/:id/tasks/:taskId/time-entries/start', async (c) => {
   const workspaceId = c.req.param('id');
+  const taskId = c.req.param('taskId');
   const userId = c.get('userId');
-  const input = c.req.valid('json');
-  const { workspaceService, taskService } = getServices(c.env.DB);
+  const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
 
   // Verify workspace access
   const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
@@ -261,15 +266,23 @@ workspaces.post('/:id/tasks/carry-over', zValidator('json', carryOverTasksSchema
     throw forbiddenError('Access denied');
   }
 
-  const tasks = await taskService.carryOverTasks(workspaceId, input);
-  return c.json({ data: tasks });
+  // Verify task belongs to workspace
+  const belongsTo = await taskService.belongsToWorkspace(taskId, workspaceId);
+  if (!belongsTo) {
+    throw notFoundError('Task not found');
+  }
+
+  const timeEntry = await timeEntryService.startTimeEntry(taskId);
+  return c.json({ data: timeEntry }, 201);
 });
 
-// GET /api/workspaces/:id/tasks/pending - Get pending tasks from past
-workspaces.get('/:id/tasks/pending', async (c) => {
+// POST /api/workspaces/:id/tasks/:taskId/time-entries/:timeEntryId/stop - Stop time tracking
+workspaces.post('/:id/tasks/:taskId/time-entries/:timeEntryId/stop', async (c) => {
   const workspaceId = c.req.param('id');
+  const taskId = c.req.param('taskId');
+  const timeEntryId = c.req.param('timeEntryId');
   const userId = c.get('userId');
-  const { workspaceService, taskService } = getServices(c.env.DB);
+  const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
 
   // Verify workspace access
   const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
@@ -277,8 +290,63 @@ workspaces.get('/:id/tasks/pending', async (c) => {
     throw forbiddenError('Access denied');
   }
 
-  const tasks = await taskService.getPendingTasksBeforeToday(workspaceId);
-  return c.json({ data: tasks });
+  // Verify task belongs to workspace
+  const belongsTo = await taskService.belongsToWorkspace(taskId, workspaceId);
+  if (!belongsTo) {
+    throw notFoundError('Task not found');
+  }
+
+  const timeEntry = await timeEntryService.stopTimeEntry(timeEntryId);
+  if (!timeEntry) {
+    throw notFoundError('Time entry not found');
+  }
+
+  return c.json({ data: timeEntry });
+});
+
+// GET /api/workspaces/:id/tasks/:taskId/time-entries - Get time entries for a task
+workspaces.get('/:id/tasks/:taskId/time-entries', async (c) => {
+  const workspaceId = c.req.param('id');
+  const taskId = c.req.param('taskId');
+  const userId = c.get('userId');
+  const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
+
+  // Verify workspace access
+  const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+  if (!canAccess) {
+    throw forbiddenError('Access denied');
+  }
+
+  // Verify task belongs to workspace
+  const belongsTo = await taskService.belongsToWorkspace(taskId, workspaceId);
+  if (!belongsTo) {
+    throw notFoundError('Task not found');
+  }
+
+  const timeEntries = await timeEntryService.getTimeEntriesByTaskId(taskId);
+  return c.json({ data: timeEntries });
+});
+
+// GET /api/workspaces/:id/tasks/:taskId/average-duration - Get average duration for repeating task
+workspaces.get('/:id/tasks/:taskId/average-duration', async (c) => {
+  const workspaceId = c.req.param('id');
+  const taskId = c.req.param('taskId');
+  const userId = c.get('userId');
+  const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
+
+  // Verify workspace access
+  const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+  if (!canAccess) {
+    throw forbiddenError('Access denied');
+  }
+
+  const task = await taskService.getTaskById(taskId);
+  if (!task || task.workspaceId !== workspaceId) {
+    throw notFoundError('Task not found');
+  }
+
+  const averageDuration = await timeEntryService.getAverageDuration(workspaceId, task.title);
+  return c.json({ data: { averageDuration } });
 });
 
 export default workspaces;

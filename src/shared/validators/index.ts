@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 // Task status enum
-export const taskStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'carried_over']);
+export const taskStatusSchema = z.enum(['pending', 'in_progress']);
+
+// Repeat pattern enum
+export const repeatPatternSchema = z.enum(['daily', 'weekdays', 'weekly', 'monthly']);
 
 // Date format validation (YYYY-MM-DD)
 const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD');
@@ -13,6 +16,7 @@ export const createTaskSchema = z.object({
   scheduledDate: dateStringSchema,
   estimatedMinutes: z.number().int().min(0).max(1440, 'Estimated minutes must be between 0 and 1440').optional(),
   sortOrder: z.number().int().optional(),
+  repeatPattern: repeatPatternSchema.optional(),
 });
 
 export const updateTaskSchema = z.object({
@@ -23,15 +27,21 @@ export const updateTaskSchema = z.object({
   actualMinutes: z.number().int().min(0).max(1440, 'Actual minutes must be between 0 and 1440').nullable().optional(),
   status: taskStatusSchema.optional(),
   sortOrder: z.number().int().optional(),
+  repeatPattern: repeatPatternSchema.nullable().optional(),
+  repeatEndDate: dateStringSchema.nullable().optional(),
 });
 
 export const reorderTasksSchema = z.object({
   taskIds: z.array(z.string().uuid()),
 });
 
-export const carryOverTasksSchema = z.object({
-  taskIds: z.array(z.string().uuid()),
-  targetDate: dateStringSchema,
+// Time entry schemas
+export const startTimeEntrySchema = z.object({
+  taskId: z.string().uuid(),
+});
+
+export const stopTimeEntrySchema = z.object({
+  timeEntryId: z.string().uuid(),
 });
 
 // Workspace schemas
@@ -62,7 +72,8 @@ export const taskQuerySchema = z.object({
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>;
-export type CarryOverTasksInput = z.infer<typeof carryOverTasksSchema>;
+export type StartTimeEntryInput = z.infer<typeof startTimeEntrySchema>;
+export type StopTimeEntryInput = z.infer<typeof stopTimeEntrySchema>;
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
 export type CreateTaskCommentInput = z.infer<typeof createTaskCommentSchema>;

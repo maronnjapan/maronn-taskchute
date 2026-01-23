@@ -1,38 +1,47 @@
-import type { Task } from '../../../shared/types/index';
+import type { Task, TimeEntry } from '../../../shared/types/index';
 import { formatMinutes } from '../../../shared/utils/index';
-import { TaskStatusBadge } from '../ui/Badge';
+import { TaskStatusBadge, RepeatPatternBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 
 interface TaskCardProps {
   task: Task;
+  activeTimeEntry?: TimeEntry | null;
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
-  onStatusChange?: (taskId: string, status: Task['status']) => void;
+  onStartTimeEntry?: (taskId: string) => void;
+  onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   isDragging?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 export function TaskCard({
   task,
+  activeTimeEntry,
   onEdit,
   onDelete,
-  onStatusChange,
+  onStartTimeEntry,
+  onStopTimeEntry,
   isDragging = false,
   dragHandleProps,
 }: TaskCardProps) {
   const handleStart = () => {
-    onStatusChange?.(task.id, 'in_progress');
+    onStartTimeEntry?.(task.id);
   };
 
-  const handleComplete = () => {
-    onStatusChange?.(task.id, 'completed');
+  const handleStop = () => {
+    if (activeTimeEntry) {
+      onStopTimeEntry?.(task.id, activeTimeEntry.id);
+    }
   };
+
+  const isRecording = Boolean(activeTimeEntry);
 
   return (
     <div
       className={`
         bg-white rounded-lg shadow-sm border border-gray-200 p-4
         ${isDragging ? 'opacity-50 shadow-lg' : ''}
+        ${isRecording ? 'border-blue-400 ring-2 ring-blue-100' : ''}
         transition-shadow duration-200 hover:shadow-md
       `}
     >
@@ -53,7 +62,12 @@ export function TaskCard({
           {/* Header */}
           <div className="flex items-center justify-between gap-2 mb-2">
             <h3 className="text-sm font-medium text-gray-900 truncate">{task.title}</h3>
-            <TaskStatusBadge status={task.status} />
+            <div className="flex items-center gap-1">
+              {task.repeatPattern && (
+                <RepeatPatternBadge pattern={task.repeatPattern} />
+              )}
+              <TaskStatusBadge status={task.status} />
+            </div>
           </div>
 
           {/* Description */}
@@ -66,21 +80,23 @@ export function TaskCard({
             {task.estimatedMinutes !== undefined && (
               <span>見積: {formatMinutes(task.estimatedMinutes)}</span>
             )}
-            {task.actualMinutes !== undefined && (
+            {task.actualMinutes !== undefined && task.actualMinutes > 0 && (
               <span>実績: {formatMinutes(task.actualMinutes)}</span>
+            )}
+            {isRecording && (
+              <span className="text-blue-600 font-medium animate-pulse">記録中...</span>
             )}
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            {task.status === 'pending' && (
-              <Button size="sm" onClick={handleStart}>
-                開始
+            {isRecording ? (
+              <Button size="sm" variant="secondary" onClick={handleStop}>
+                停止
               </Button>
-            )}
-            {task.status === 'in_progress' && (
-              <Button size="sm" variant="secondary" onClick={handleComplete}>
-                完了
+            ) : (
+              <Button size="sm" onClick={handleStart}>
+                記録開始
               </Button>
             )}
             {onEdit && (
@@ -88,7 +104,7 @@ export function TaskCard({
                 編集
               </Button>
             )}
-            {onDelete && task.status !== 'in_progress' && (
+            {onDelete && !isRecording && (
               <Button size="sm" variant="ghost" onClick={() => onDelete(task.id)}>
                 削除
               </Button>

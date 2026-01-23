@@ -4,9 +4,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   ReorderTasksInput,
-  CarryOverTasksInput,
 } from '../../shared/validators/index';
-import { getTodayString } from '../../shared/utils/index';
 
 export class TaskService {
   constructor(private taskRepo: TaskRepository) {}
@@ -30,6 +28,7 @@ export class TaskService {
       scheduledDate: input.scheduledDate,
       estimatedMinutes: input.estimatedMinutes,
       sortOrder: input.sortOrder,
+      repeatPattern: input.repeatPattern,
     });
   }
 
@@ -42,6 +41,8 @@ export class TaskService {
       actualMinutes: input.actualMinutes,
       status: input.status,
       sortOrder: input.sortOrder,
+      repeatPattern: input.repeatPattern,
+      repeatEndDate: input.repeatEndDate,
     });
   }
 
@@ -53,11 +54,8 @@ export class TaskService {
     return this.taskRepo.update(id, { status: 'in_progress' });
   }
 
-  async completeTask(id: string, actualMinutes?: number): Promise<Task | null> {
-    return this.taskRepo.update(id, {
-      status: 'completed',
-      actualMinutes,
-    });
+  async stopTask(id: string): Promise<Task | null> {
+    return this.taskRepo.update(id, { status: 'pending' });
   }
 
   async reorderTasks(workspaceId: string, input: ReorderTasksInput): Promise<Task[]> {
@@ -83,24 +81,22 @@ export class TaskService {
     );
   }
 
-  async carryOverTasks(workspaceId: string, input: CarryOverTasksInput): Promise<Task[]> {
-    // Verify all tasks belong to the workspace
-    for (const taskId of input.taskIds) {
-      const belongsTo = await this.taskRepo.belongsToWorkspace(taskId, workspaceId);
-      if (!belongsTo) {
-        throw new Error(`Task ${taskId} does not belong to workspace ${workspaceId}`);
-      }
-    }
-
-    return this.taskRepo.carryOver(input.taskIds, input.targetDate);
-  }
-
-  async getPendingTasksBeforeToday(workspaceId: string): Promise<Task[]> {
-    const today = getTodayString();
-    return this.taskRepo.findPendingByWorkspaceIdBeforeDate(workspaceId, today);
-  }
-
   async belongsToWorkspace(taskId: string, workspaceId: string): Promise<boolean> {
     return this.taskRepo.belongsToWorkspace(taskId, workspaceId);
+  }
+
+  // End repeat for a task from a specific date
+  async endRepeat(id: string, endDate: string): Promise<Task | null> {
+    return this.taskRepo.endRepeat(id, endDate);
+  }
+
+  // Remove repeat pattern entirely
+  async removeRepeat(id: string): Promise<Task | null> {
+    return this.taskRepo.removeRepeat(id);
+  }
+
+  // Get all repeating tasks for a workspace
+  async getRepeatingTasks(workspaceId: string): Promise<Task[]> {
+    return this.taskRepo.findRepeatingByWorkspaceId(workspaceId);
   }
 }

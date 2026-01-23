@@ -10,7 +10,6 @@ export function TimeSummary({ tasks }: TimeSummaryProps) {
   const summary = useMemo(() => {
     let totalEstimated = 0;
     let totalActual = 0;
-    let completedCount = 0;
     let inProgressCount = 0;
     let pendingCount = 0;
 
@@ -21,23 +20,16 @@ export function TimeSummary({ tasks }: TimeSummaryProps) {
       if (task.actualMinutes) {
         totalActual += task.actualMinutes;
       }
-      switch (task.status) {
-        case 'completed':
-          completedCount++;
-          break;
-        case 'in_progress':
-          inProgressCount++;
-          break;
-        case 'pending':
-          pendingCount++;
-          break;
+      if (task.status === 'in_progress') {
+        inProgressCount++;
+      } else {
+        pendingCount++;
       }
     }
 
     return {
       totalEstimated,
       totalActual,
-      completedCount,
       inProgressCount,
       pendingCount,
       totalCount: tasks.length,
@@ -55,8 +47,8 @@ export function TimeSummary({ tasks }: TimeSummaryProps) {
         <div>
           <p className="text-xs text-gray-500">タスク数</p>
           <p className="text-lg font-semibold text-gray-900">
-            {summary.completedCount}/{summary.totalCount}
-            <span className="text-sm font-normal text-gray-500 ml-1">完了</span>
+            {summary.totalCount}
+            <span className="text-sm font-normal text-gray-500 ml-1">件</span>
           </p>
         </div>
         <div>

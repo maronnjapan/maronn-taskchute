@@ -4,6 +4,7 @@ import type {
   TaskComment,
   AuthUser,
   ApiResponse,
+  TimeEntry,
 } from '../../shared/types/index';
 import type {
   CreateTaskInput,
@@ -13,7 +14,6 @@ import type {
   CreateTaskCommentInput,
   UpdateTaskCommentInput,
   ReorderTasksInput,
-  CarryOverTasksInput,
 } from '../../shared/validators/index';
 
 const BASE_URL = '';
@@ -171,25 +171,6 @@ export const taskApi = {
     return result.data;
   },
 
-  async carryOver(workspaceId: string, input: CarryOverTasksInput): Promise<Task[]> {
-    const response = await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/tasks/carry-over`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(input),
-    });
-    const result = await handleResponse<ApiResponse<Task[]>>(response);
-    return result.data;
-  },
-
-  async getPending(workspaceId: string): Promise<Task[]> {
-    const response = await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/tasks/pending`, {
-      credentials: 'include',
-    });
-    const result = await handleResponse<ApiResponse<Task[]>>(response);
-    return result.data;
-  },
-
   async listByShareToken(shareToken: string, options?: { date?: string; status?: string }): Promise<Task[]> {
     const params = new URLSearchParams();
     if (options?.date) params.set('date', options.date);
@@ -201,6 +182,51 @@ export const taskApi = {
     });
     const result = await handleResponse<ApiResponse<Task[]>>(response);
     return result.data;
+  },
+};
+
+// Time Entry API
+export const timeEntryApi = {
+  async list(workspaceId: string, taskId: string): Promise<TimeEntry[]> {
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries`,
+      { credentials: 'include' }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry[]>>(response);
+    return result.data;
+  },
+
+  async start(workspaceId: string, taskId: string): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries/start`,
+      {
+        method: 'POST',
+        credentials: 'include',
+      }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
+  },
+
+  async stop(workspaceId: string, taskId: string, timeEntryId: string): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries/${timeEntryId}/stop`,
+      {
+        method: 'POST',
+        credentials: 'include',
+      }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
+  },
+
+  async getAverageDuration(workspaceId: string, taskId: string): Promise<number | null> {
+    const response = await fetch(
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/average-duration`,
+      { credentials: 'include' }
+    );
+    const result = await handleResponse<ApiResponse<{ averageDuration: number | null }>>(response);
+    return result.data.averageDuration;
   },
 };
 

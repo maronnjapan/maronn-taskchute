@@ -2,11 +2,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWorkspaceByShareToken, useTasksByShareToken } from '../hooks';
 import { useTaskStore } from '../stores/task-store';
-import { taskApi } from '../services/api-client';
+import { taskApi, timeEntryApi } from '../services/api-client';
 import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 import { SortableTaskList, TaskForm, DateNavigator, TimeSummary } from '../components/features';
-import type { Task } from '../../shared/types/index';
+import type { Task, TimeEntry } from '../../shared/types/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
 
 export function SharedWorkspacePage() {
@@ -15,6 +15,7 @@ export function SharedWorkspacePage() {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTimeEntries, setActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
 
   const {
     data: workspace,
@@ -84,15 +85,35 @@ export function SharedWorkspacePage() {
     [workspace, refetchTasks]
   );
 
-  const handleStatusChange = useCallback(
-    async (taskId: string, status: Task['status']) => {
+  const handleStartTimeEntry = useCallback(
+    async (taskId: string) => {
       if (!workspace) return;
 
       try {
-        await taskApi.update(workspace.id, taskId, { status });
+        const timeEntry = await timeEntryApi.start(workspace.id, taskId);
+        setActiveTimeEntries((prev) => new Map(prev).set(taskId, timeEntry));
         void refetchTasks();
       } catch (error) {
-        console.error('Failed to update task status:', error);
+        console.error('Failed to start time entry:', error);
+      }
+    },
+    [workspace, refetchTasks]
+  );
+
+  const handleStopTimeEntry = useCallback(
+    async (taskId: string, timeEntryId: string) => {
+      if (!workspace) return;
+
+      try {
+        await timeEntryApi.stop(workspace.id, taskId, timeEntryId);
+        setActiveTimeEntries((prev) => {
+          const next = new Map(prev);
+          next.delete(taskId);
+          return next;
+        });
+        void refetchTasks();
+      } catch (error) {
+        console.error('Failed to stop time entry:', error);
       }
     },
     [workspace, refetchTasks]
@@ -152,9 +173,11 @@ export function SharedWorkspacePage() {
       ) : (
         <SortableTaskList
           tasks={tasks}
+          activeTimeEntries={activeTimeEntries}
           onEditTask={handleEditTask}
           onDeleteTask={handleDeleteTask}
-          onStatusChange={handleStatusChange}
+          onStartTimeEntry={handleStartTimeEntry}
+          onStopTimeEntry={handleStopTimeEntry}
           emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
         />
       )}
