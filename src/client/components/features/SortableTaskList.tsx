@@ -92,26 +92,28 @@ export function SortableTaskList({
   const [activeId, setActiveId] = useState<string | null>(null);
   // Local state for immediate visual feedback during drag
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks);
-  // Track if we have a pending reorder to prevent external updates
-  const [isPendingReorder, setIsPendingReorder] = useState(false);
+  // Track if we're currently dragging
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Determine which tasks to display
-  const tasksToDisplay = useMemo(() => {
-    if (isPendingReorder) {
-      return localTasks;
-    }
-    return tasks;
-  }, [isPendingReorder, localTasks, tasks]);
+  // Create a stable key for props tasks (IDs + sortOrders)
+  const propsTasksKey = useMemo(
+    () => tasks.map((t) => `${t.id}:${t.sortOrder}`).join(','),
+    [tasks]
+  );
+  const localTasksKey = useMemo(
+    () => localTasks.map((t) => `${t.id}:${t.sortOrder}`).join(','),
+    [localTasks]
+  );
 
-  // Sync local tasks when props change and not pending
-  const propsTaskIds = tasks.map((t) => t.id).join(',');
-  const localTaskIds = localTasks.map((t) => t.id).join(',');
-  const shouldSync = !isPendingReorder && propsTaskIds !== localTaskIds;
-
-  // Keep local tasks in sync with props when we're not in pending state
-  if (shouldSync) {
-    void Promise.resolve().then(() => setLocalTasks(tasks));
+  // Sync local tasks with props when not dragging and props have changed
+  // Use the combined key to detect both ID changes and sortOrder changes
+  if (!isDragging && propsTasksKey !== localTasksKey) {
+    // Use queueMicrotask to avoid updating state during render
+    queueMicrotask(() => setLocalTasks(tasks));
   }
+
+  // Always display localTasks to maintain visual consistency
+  const tasksToDisplay = localTasks;
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -131,6 +133,7 @@ export function SortableTaskList({
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    setIsDragging(true);
   }, []);
 
   const handleDragEnd = useCallback(
@@ -138,35 +141,32 @@ export function SortableTaskList({
       const { active, over } = event;
 
       setActiveId(null);
+      setIsDragging(false);
 
       if (over && active.id !== over.id) {
-        const oldIndex = tasksToDisplay.findIndex((t) => t.id === active.id);
-        const newIndex = tasksToDisplay.findIndex((t) => t.id === over.id);
+        const oldIndex = localTasks.findIndex((t) => t.id === active.id);
+        const newIndex = localTasks.findIndex((t) => t.id === over.id);
 
         if (oldIndex !== -1 && newIndex !== -1) {
-          const newTasks = arrayMove(tasksToDisplay, oldIndex, newIndex);
+          const newTasks = arrayMove(localTasks, oldIndex, newIndex);
 
-          // Update local state immediately for visual feedback
+          // Update local state for visual feedback until server responds
           setLocalTasks(newTasks);
-          setIsPendingReorder(true);
 
           const taskIds = newTasks.map((t) => t.id);
           onReorder?.(taskIds);
-
-          // Reset pending state after a short delay to allow server sync
-          setTimeout(() => {
-            setIsPendingReorder(false);
-          }, 500);
         }
       }
     },
-    [tasksToDisplay, onReorder]
+    [localTasks, onReorder]
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
-    setIsPendingReorder(false);
-  }, []);
+    setIsDragging(false);
+    // Reset localTasks to props on cancel
+    setLocalTasks(tasks);
+  }, [tasks]);
 
   if (tasksToDisplay.length === 0) {
     return (
