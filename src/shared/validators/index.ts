@@ -9,22 +9,34 @@ export const repeatPatternSchema = z.enum(['daily', 'weekdays', 'weekly', 'month
 // Date format validation (YYYY-MM-DD)
 const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format. Use YYYY-MM-DD');
 
+// Optional minutes schema that handles NaN from empty number inputs
+const optionalMinutesSchema = z
+  .union([z.number(), z.nan(), z.undefined()])
+  .transform(val => Number.isNaN(val) ? undefined : val)
+  .pipe(z.number().int().min(0).max(1440, 'Estimated minutes must be between 0 and 1440').optional());
+
 // Task schemas
 export const createTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or less'),
   description: z.string().max(10000, 'Description must be 10000 characters or less').optional(),
   scheduledDate: dateStringSchema,
-  estimatedMinutes: z.number().int().min(0).max(1440, 'Estimated minutes must be between 0 and 1440').optional(),
+  estimatedMinutes: optionalMinutesSchema,
   sortOrder: z.number().int().optional(),
   repeatPattern: repeatPatternSchema.optional(),
 });
+
+// Nullable optional minutes schema for updates (handles NaN and null)
+const nullableOptionalMinutesSchema = z
+  .union([z.number(), z.nan(), z.null(), z.undefined()])
+  .transform(val => Number.isNaN(val) ? undefined : val)
+  .pipe(z.number().int().min(0).max(1440, 'Actual minutes must be between 0 and 1440').nullable().optional());
 
 export const updateTaskSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or less').optional(),
   description: z.string().max(10000, 'Description must be 10000 characters or less').nullable().optional(),
   scheduledDate: dateStringSchema.optional(),
-  estimatedMinutes: z.number().int().min(0).max(1440, 'Estimated minutes must be between 0 and 1440').nullable().optional(),
-  actualMinutes: z.number().int().min(0).max(1440, 'Actual minutes must be between 0 and 1440').nullable().optional(),
+  estimatedMinutes: nullableOptionalMinutesSchema,
+  actualMinutes: nullableOptionalMinutesSchema,
   status: taskStatusSchema.optional(),
   sortOrder: z.number().int().optional(),
   repeatPattern: repeatPatternSchema.nullable().optional(),
