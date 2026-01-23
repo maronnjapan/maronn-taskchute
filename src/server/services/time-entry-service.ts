@@ -47,6 +47,27 @@ export class TimeEntryService {
     return this.timeEntryRepo.delete(id);
   }
 
+  async updateTimeEntry(
+    timeEntryId: string,
+    input: { startedAt?: number; endedAt?: number | null; durationMinutes?: number | null }
+  ): Promise<TimeEntry | null> {
+    const entry = await this.timeEntryRepo.update(timeEntryId, input);
+
+    if (entry) {
+      // Recalculate task's actual minutes with total duration
+      const totalDuration = await this.timeEntryRepo.getTotalDurationByTaskId(entry.taskId);
+      await this.taskRepo.update(entry.taskId, {
+        actualMinutes: totalDuration,
+      });
+    }
+
+    return entry;
+  }
+
+  async getTimeEntryById(id: string): Promise<TimeEntry | null> {
+    return this.timeEntryRepo.findById(id);
+  }
+
   async getTimeEntriesByTaskIds(taskIds: string[]): Promise<Map<string, TimeEntry[]>> {
     return this.timeEntryRepo.findByTaskIds(taskIds);
   }

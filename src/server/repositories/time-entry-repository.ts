@@ -107,6 +107,48 @@ export class TimeEntryRepository {
     return this.findById(id);
   }
 
+  async update(
+    id: string,
+    input: { startedAt?: number; endedAt?: number | null; durationMinutes?: number | null }
+  ): Promise<TimeEntry | null> {
+    const entry = await this.findById(id);
+    if (!entry) return null;
+
+    const now = nowUnix();
+    const updates: string[] = [];
+    const values: (number | null)[] = [];
+
+    if (input.startedAt !== undefined) {
+      updates.push('started_at = ?');
+      values.push(input.startedAt);
+    }
+
+    if (input.endedAt !== undefined) {
+      updates.push('ended_at = ?');
+      values.push(input.endedAt);
+    }
+
+    if (input.durationMinutes !== undefined) {
+      updates.push('duration_minutes = ?');
+      values.push(input.durationMinutes);
+    }
+
+    if (updates.length === 0) {
+      return entry;
+    }
+
+    updates.push('updated_at = ?');
+    values.push(now);
+    values.push(id as unknown as number); // id for WHERE clause
+
+    await this.db
+      .prepare(`UPDATE time_entries SET ${updates.join(', ')} WHERE id = ?`)
+      .bind(...values)
+      .run();
+
+    return this.findById(id);
+  }
+
   async delete(id: string): Promise<boolean> {
     const result = await this.db
       .prepare('DELETE FROM time_entries WHERE id = ?')

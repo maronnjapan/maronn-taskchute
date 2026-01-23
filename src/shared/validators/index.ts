@@ -44,6 +44,12 @@ export const stopTimeEntrySchema = z.object({
   timeEntryId: z.string().uuid(),
 });
 
+export const updateTimeEntrySchema = z.object({
+  startedAt: z.number().int().positive().optional(),
+  endedAt: z.number().int().positive().nullable().optional(),
+  durationMinutes: z.number().int().min(0).max(1440).nullable().optional(),
+});
+
 // Workspace schemas
 export const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be 100 characters or less'),
@@ -74,6 +80,7 @@ export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>;
 export type StartTimeEntryInput = z.infer<typeof startTimeEntrySchema>;
 export type StopTimeEntryInput = z.infer<typeof stopTimeEntrySchema>;
+export type UpdateTimeEntryInput = z.infer<typeof updateTimeEntrySchema>;
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 export type UpdateWorkspaceInput = z.infer<typeof updateWorkspaceSchema>;
 export type CreateTaskCommentInput = z.infer<typeof createTaskCommentSchema>;

@@ -5,6 +5,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   ReorderTasksInput,
+  UpdateTimeEntryInput,
 } from '../../shared/validators/index';
 import type { Task, TimeEntry } from '../../shared/types/index';
 
@@ -154,13 +155,36 @@ export function useTimeEntries(workspaceId: string, taskId: string) {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({
+      timeEntryId,
+      input,
+    }: {
+      timeEntryId: string;
+      input: UpdateTimeEntryInput;
+    }) => timeEntryApi.update(workspaceId, taskId, timeEntryId, input),
+    onSuccess: async () => {
+      // Immediately refetch the task to get updated actualMinutes
+      try {
+        const updatedTask = await taskApi.get(workspaceId, taskId);
+        updateTask(updatedTask.id, updatedTask);
+      } catch (error) {
+        console.error('Failed to refetch task after updating time entry:', error);
+      }
+      void queryClient.invalidateQueries({ queryKey: timeEntryKeys.list(workspaceId, taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+    },
+  });
+
   return {
     timeEntries: listQuery.data ?? [],
     isLoading: listQuery.isLoading,
     start: startMutation.mutate,
     stop: stopMutation.mutate,
+    update: updateMutation.mutate,
     isStarting: startMutation.isPending,
     isStopping: stopMutation.isPending,
+    isUpdating: updateMutation.isPending,
   };
 }
 

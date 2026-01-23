@@ -8,3 +8,4 @@ export { WorkspaceForm } from './WorkspaceForm';
 export { Header } from './Header';
 export { TimeSummary } from './TimeSummary';
 export { ShareLinkDisplay } from './ShareLinkDisplay';
+export { TimeEntryListModal } from './TimeEntryListModal';

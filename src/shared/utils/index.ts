@@ -83,6 +83,35 @@ export function formatTimestamp(timestamp: number): string {
 }
 
 /**
+ * Format Unix timestamp to time only (HH:MM)
+ */
+export function formatTime(timestamp: number): string {
+  const date = unixToDate(timestamp);
+  return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * Format Unix timestamp to date and time (MM/DD HH:MM)
+ */
+export function formatDateTime(timestamp: number): string {
+  const date = unixToDate(timestamp);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const time = date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  return `${month}/${day} ${time}`;
+}
+
+/**
+ * Parse time string (HH:MM) and create Unix timestamp for today
+ */
+export function parseTimeToUnix(timeString: string, baseDate?: Date): number {
+  const [hours, minutes] = timeString.split(':').map(Number);
+  const date = baseDate ? new Date(baseDate) : new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return dateToUnix(date);
+}
+
+/**
  * Check if a date string is valid YYYY-MM-DD format
  */
 export function isValidDateString(dateStr: string): boolean {
