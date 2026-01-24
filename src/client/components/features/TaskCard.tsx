@@ -52,9 +52,9 @@ export function TaskCard({
         {dragHandleProps && (
           <div
             {...dragHandleProps}
-            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+            className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none select-none p-2 -m-2"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
             </svg>
           </div>
