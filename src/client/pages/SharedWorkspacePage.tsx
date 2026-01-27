@@ -79,14 +79,14 @@ export function SharedWorkspacePage() {
 
   const handleCreateTask = useCallback(
     async (data: CreateTaskInput | UpdateTaskInput) => {
-      if (!workspace) return;
+      if (!shareToken) return;
 
       setIsSubmitting(true);
       try {
         if (editingTaskId) {
-          await taskApi.update(workspace.id, editingTaskId, data as UpdateTaskInput);
+          await taskApi.updateByShareToken(shareToken, editingTaskId, data as UpdateTaskInput);
         } else {
-          await taskApi.create(workspace.id, data as CreateTaskInput);
+          await taskApi.createByShareToken(shareToken, data as CreateTaskInput);
         }
         closeTaskForm();
         void refetchTasks();
@@ -96,7 +96,7 @@ export function SharedWorkspacePage() {
         setIsSubmitting(false);
       }
     },
-    [workspace, editingTaskId, closeTaskForm, refetchTasks]
+    [shareToken, editingTaskId, closeTaskForm, refetchTasks]
   );
 
   const handleEditTask = useCallback((task: Task) => {
@@ -105,40 +105,40 @@ export function SharedWorkspacePage() {
 
   const handleDeleteTask = useCallback(
     async (taskId: string) => {
-      if (!workspace) return;
+      if (!shareToken) return;
       if (!confirm('このタスクを削除しますか？')) return;
 
       try {
-        await taskApi.delete(workspace.id, taskId);
+        await taskApi.deleteByShareToken(shareToken, taskId);
         void refetchTasks();
       } catch (error) {
         console.error('Failed to delete task:', error);
       }
     },
-    [workspace, refetchTasks]
+    [shareToken, refetchTasks]
   );
 
   const handleStartTimeEntry = useCallback(
     async (taskId: string) => {
-      if (!workspace) return;
+      if (!shareToken) return;
 
       try {
-        const timeEntry = await timeEntryApi.start(workspace.id, taskId);
+        const timeEntry = await timeEntryApi.startByShareToken(shareToken, taskId);
         setManualActiveTimeEntries((prev) => new Map(prev).set(taskId, timeEntry));
         void refetchTasks();
       } catch (error) {
         console.error('Failed to start time entry:', error);
       }
     },
-    [workspace, refetchTasks]
+    [shareToken, refetchTasks]
   );
 
   const handleStopTimeEntry = useCallback(
     async (taskId: string, timeEntryId: string) => {
-      if (!workspace) return;
+      if (!shareToken) return;
 
       try {
-        await timeEntryApi.stop(workspace.id, taskId, timeEntryId);
+        await timeEntryApi.stopByShareToken(shareToken, taskId, timeEntryId);
         setManualActiveTimeEntries((prev) => {
           const next = new Map(prev);
           next.delete(taskId);
@@ -149,7 +149,7 @@ export function SharedWorkspacePage() {
         console.error('Failed to stop time entry:', error);
       }
     },
-    [workspace, refetchTasks]
+    [shareToken, refetchTasks]
   );
 
   // Loading state

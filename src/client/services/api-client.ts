@@ -184,6 +184,43 @@ export const taskApi = {
     const result = await handleResponse<ApiResponse<Task[]>>(response);
     return result.data;
   },
+
+  async createByShareToken(shareToken: string, input: CreateTaskInput): Promise<Task> {
+    const response = await fetch(`${BASE_URL}/api/s/${shareToken}/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await handleResponse<ApiResponse<Task>>(response);
+    return result.data;
+  },
+
+  async updateByShareToken(shareToken: string, taskId: string, input: UpdateTaskInput): Promise<Task> {
+    const response = await fetch(`${BASE_URL}/api/s/${shareToken}/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await handleResponse<ApiResponse<Task>>(response);
+    return result.data;
+  },
+
+  async deleteByShareToken(shareToken: string, taskId: string): Promise<void> {
+    const response = await fetch(`${BASE_URL}/api/s/${shareToken}/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+    await handleResponse<ApiResponse<{ success: boolean }>>(response);
+  },
+
+  async reorderByShareToken(shareToken: string, input: ReorderTasksInput): Promise<Task[]> {
+    const response = await fetch(`${BASE_URL}/api/s/${shareToken}/tasks/reorder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const result = await handleResponse<ApiResponse<Task[]>>(response);
+    return result.data;
+  },
 };
 
 // Time Entry API
@@ -257,6 +294,42 @@ export const timeEntryApi = {
     );
     const result = await handleResponse<ApiResponse<{ averageDuration: number | null }>>(response);
     return result.data.averageDuration;
+  },
+
+  async startByShareToken(shareToken: string, taskId: string): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/s/${shareToken}/tasks/${taskId}/time-entries/start`,
+      { method: 'POST' }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
+  },
+
+  async stopByShareToken(shareToken: string, taskId: string, timeEntryId: string): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/s/${shareToken}/tasks/${taskId}/time-entries/${timeEntryId}/stop`,
+      { method: 'POST' }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
+  },
+
+  async updateByShareToken(
+    shareToken: string,
+    taskId: string,
+    timeEntryId: string,
+    input: UpdateTimeEntryInput
+  ): Promise<TimeEntry> {
+    const response = await fetch(
+      `${BASE_URL}/api/s/${shareToken}/tasks/${taskId}/time-entries/${timeEntryId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }
+    );
+    const result = await handleResponse<ApiResponse<TimeEntry>>(response);
+    return result.data;
   },
 };
 
