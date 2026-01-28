@@ -336,6 +336,7 @@ export function TaskListPage() {
           onClose={handleCloseTimeEntries}
           task={viewingTimeEntriesTask}
           workspaceId={activeWorkspaceId}
+          date={selectedDate}
         />
       )}
     </div>

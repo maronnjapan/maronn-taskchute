@@ -1,4 +1,5 @@
 import type { TaskRepository } from '../repositories/task-repository';
+import type { TimeEntryRepository } from '../repositories/time-entry-repository';
 import type { Task, TaskStatus } from '../../shared/types/index';
 import type {
   CreateTaskInput,
@@ -7,13 +8,46 @@ import type {
 } from '../../shared/validators/index';
 
 export class TaskService {
-  constructor(private taskRepo: TaskRepository) {}
+  constructor(
+    private taskRepo: TaskRepository,
+    private timeEntryRepo?: TimeEntryRepository
+  ) {}
 
   async getTasksByWorkspace(
     workspaceId: string,
     options?: { date?: string; status?: TaskStatus }
   ): Promise<Task[]> {
-    return this.taskRepo.findByWorkspaceId(workspaceId, options);
+    const tasks = await this.taskRepo.findByWorkspaceId(workspaceId, options);
+
+    // For repeating tasks queried by date, override actualMinutes and status
+    // with values calculated only from that day's time entries
+    if (options?.date && this.timeEntryRepo) {
+      const repeatingTasks = tasks.filter((t) => t.repeatPattern);
+      if (repeatingTasks.length > 0) {
+        const repeatingTaskIds = repeatingTasks.map((t) => t.id);
+        const [dailyDurations, activeEntries] = await Promise.all([
+          this.timeEntryRepo.getDailyDurationsByTaskIds(repeatingTaskIds, options.date),
+          this.timeEntryRepo.findActiveByTaskIdsAndDate(repeatingTaskIds, options.date),
+        ]);
+
+        return tasks.map((task) => {
+          if (!task.repeatPattern) return task;
+
+          const dailyDuration = dailyDurations.get(task.id) ?? 0;
+          const hasActiveEntry = activeEntries.has(task.id);
+          const hasAnyDuration = dailyDuration > 0;
+
+          return {
+            ...task,
+            actualMinutes: dailyDuration || undefined,
+            status: hasActiveEntry ? 'in_progress' as const : (hasAnyDuration ? 'in_progress' as const : 'pending' as const),
+            startedAt: hasActiveEntry ? activeEntries.get(task.id)!.startedAt : undefined,
+          };
+        });
+      }
+    }
+
+    return tasks;
   }
 
   async getTaskById(id: string): Promise<Task | null> {

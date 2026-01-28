@@ -8,7 +8,10 @@ export class TimeEntryService {
     private taskRepo: TaskRepository
   ) {}
 
-  async getTimeEntriesByTaskId(taskId: string): Promise<TimeEntry[]> {
+  async getTimeEntriesByTaskId(taskId: string, date?: string): Promise<TimeEntry[]> {
+    if (date) {
+      return this.timeEntryRepo.findByTaskIdAndDate(taskId, date);
+    }
     return this.timeEntryRepo.findByTaskId(taskId);
   }
 

@@ -10,6 +10,7 @@ interface TimeEntryListModalProps {
   onClose: () => void;
   task: Task;
   workspaceId: string;
+  date?: string;
 }
 
 interface EditingState {
@@ -39,8 +40,11 @@ export function TimeEntryListModal({
   onClose,
   task,
   workspaceId,
+  date,
 }: TimeEntryListModalProps) {
-  const { timeEntries, isLoading, update, isUpdating } = useTimeEntries(workspaceId, task.id);
+  // For repeating tasks, filter time entries by the selected date
+  const dateFilter = task.repeatPattern && date ? { date } : undefined;
+  const { timeEntries, isLoading, update, isUpdating } = useTimeEntries(workspaceId, task.id, dateFilter);
   const [editingEntry, setEditingEntry] = useState<EditingState | null>(null);
 
   const handleEdit = (entry: TimeEntry) => {
