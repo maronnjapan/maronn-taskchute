@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import type { TimeEntry } from '../../shared/types/index';
-import { generateId, nowUnix } from '../../shared/utils/index';
+import { generateId, nowUnix, getDateUnixRange } from '../../shared/utils/index';
 
 interface TimeEntryRow {
   id: string;
@@ -218,5 +218,95 @@ export class TimeEntryRepository {
       .all<TimeEntryRow>();
 
     return (result.results ?? []).map(rowToTimeEntry);
+  }
+
+  // Get total duration for a task on a specific date (YYYY-MM-DD)
+  async getDailyDurationByTaskId(taskId: string, date: string): Promise<number> {
+    const { start, end } = getDateUnixRange(date);
+    const result = await this.db
+      .prepare(
+        `SELECT SUM(duration_minutes) as total FROM time_entries
+         WHERE task_id = ? AND started_at >= ? AND started_at <= ? AND duration_minutes IS NOT NULL`
+      )
+      .bind(taskId, start, end)
+      .first<{ total: number | null }>();
+
+    return result?.total ?? 0;
+  }
+
+  // Get time entries for a task on a specific date (YYYY-MM-DD)
+  async findByTaskIdAndDate(taskId: string, date: string): Promise<TimeEntry[]> {
+    const { start, end } = getDateUnixRange(date);
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM time_entries
+         WHERE task_id = ? AND started_at >= ? AND started_at <= ?
+         ORDER BY started_at DESC`
+      )
+      .bind(taskId, start, end)
+      .all<TimeEntryRow>();
+
+    return (result.results ?? []).map(rowToTimeEntry);
+  }
+
+  // Find active (running) time entry for a task on a specific date
+  async findActiveByTaskIdAndDate(taskId: string, date: string): Promise<TimeEntry | null> {
+    const { start, end } = getDateUnixRange(date);
+    const row = await this.db
+      .prepare(
+        `SELECT * FROM time_entries
+         WHERE task_id = ? AND started_at >= ? AND started_at <= ? AND ended_at IS NULL
+         ORDER BY started_at DESC LIMIT 1`
+      )
+      .bind(taskId, start, end)
+      .first<TimeEntryRow>();
+
+    return row ? rowToTimeEntry(row) : null;
+  }
+
+  // Get daily durations for multiple tasks on a specific date
+  async getDailyDurationsByTaskIds(taskIds: string[], date: string): Promise<Map<string, number>> {
+    if (taskIds.length === 0) return new Map();
+
+    const { start, end } = getDateUnixRange(date);
+    const placeholders = taskIds.map(() => '?').join(',');
+    const result = await this.db
+      .prepare(
+        `SELECT task_id, SUM(duration_minutes) as total FROM time_entries
+         WHERE task_id IN (${placeholders}) AND started_at >= ? AND started_at <= ? AND duration_minutes IS NOT NULL
+         GROUP BY task_id`
+      )
+      .bind(...taskIds, start, end)
+      .all<{ task_id: string; total: number | null }>();
+
+    const map = new Map<string, number>();
+    for (const row of result.results ?? []) {
+      map.set(row.task_id, row.total ?? 0);
+    }
+    return map;
+  }
+
+  // Find active time entries for multiple tasks on a specific date
+  async findActiveByTaskIdsAndDate(taskIds: string[], date: string): Promise<Map<string, TimeEntry>> {
+    if (taskIds.length === 0) return new Map();
+
+    const { start, end } = getDateUnixRange(date);
+    const placeholders = taskIds.map(() => '?').join(',');
+    const result = await this.db
+      .prepare(
+        `SELECT * FROM time_entries
+         WHERE task_id IN (${placeholders}) AND started_at >= ? AND started_at <= ? AND ended_at IS NULL
+         ORDER BY started_at DESC`
+      )
+      .bind(...taskIds, start, end)
+      .all<TimeEntryRow>();
+
+    const map = new Map<string, TimeEntry>();
+    for (const row of result.results ?? []) {
+      if (!map.has(row.task_id)) {
+        map.set(row.task_id, rowToTimeEntry(row));
+      }
+    }
+    return map;
   }
 }

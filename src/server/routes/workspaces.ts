@@ -35,7 +35,7 @@ function getServices(db: D1Database) {
   const timeEntryRepo = new TimeEntryRepository(db);
   return {
     workspaceService: new WorkspaceService(workspaceRepo),
-    taskService: new TaskService(taskRepo),
+    taskService: new TaskService(taskRepo, timeEntryRepo),
     timeEntryService: new TimeEntryService(timeEntryRepo, taskRepo),
   };
 }
@@ -348,6 +348,7 @@ workspaces.patch(
 workspaces.get('/:id/tasks/:taskId/time-entries', async (c) => {
   const workspaceId = c.req.param('id');
   const taskId = c.req.param('taskId');
+  const date = c.req.query('date');
   const userId = c.get('userId');
   const { workspaceService, taskService, timeEntryService } = getServices(c.env.DB);
 
@@ -363,7 +364,7 @@ workspaces.get('/:id/tasks/:taskId/time-entries', async (c) => {
     throw notFoundError('Task not found');
   }
 
-  const timeEntries = await timeEntryService.getTimeEntriesByTaskId(taskId);
+  const timeEntries = await timeEntryService.getTimeEntriesByTaskId(taskId, date ?? undefined);
   return c.json({ data: timeEntries });
 });
 

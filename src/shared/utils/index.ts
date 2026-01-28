@@ -112,6 +112,16 @@ export function parseTimeToUnix(timeString: string, baseDate?: Date): number {
 }
 
 /**
+ * Get the Unix timestamp range (start and end) for a given date string (YYYY-MM-DD)
+ * Returns start of day and end of day in UTC
+ */
+export function getDateUnixRange(dateStr: string): { start: number; end: number } {
+  const start = Math.floor(new Date(dateStr + 'T00:00:00Z').getTime() / 1000);
+  const end = Math.floor(new Date(dateStr + 'T23:59:59Z').getTime() / 1000);
+  return { start, end };
+}
+
+/**
  * Check if a date string is valid YYYY-MM-DD format
  */
 export function isValidDateString(dateStr: string): boolean {

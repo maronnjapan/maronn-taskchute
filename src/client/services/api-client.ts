@@ -225,9 +225,13 @@ export const taskApi = {
 
 // Time Entry API
 export const timeEntryApi = {
-  async list(workspaceId: string, taskId: string): Promise<TimeEntry[]> {
+  async list(workspaceId: string, taskId: string, options?: { date?: string }): Promise<TimeEntry[]> {
+    const params = new URLSearchParams();
+    if (options?.date) params.set('date', options.date);
+    const query = params.toString() ? `?${params.toString()}` : '';
+
     const response = await fetch(
-      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries`,
+      `${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/time-entries${query}`,
       { credentials: 'include' }
     );
     const result = await handleResponse<ApiResponse<TimeEntry[]>>(response);

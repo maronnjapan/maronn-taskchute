@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { getDateUnixRange } from '../index';
 
 /**
  * 日付フォーマット関数
@@ -58,5 +59,28 @@ describe('formatMinutes', () => {
 
   it('0分の場合は「0分」と表示される', () => {
     expect(formatMinutes(0)).toBe('0分');
+  });
+});
+
+describe('getDateUnixRange', () => {
+  it('日付文字列からUTCの開始・終了タイムスタンプを返す', () => {
+    const { start, end } = getDateUnixRange('2024-01-15');
+
+    // 2024-01-15 00:00:00 UTC
+    expect(start).toBe(Math.floor(new Date('2024-01-15T00:00:00Z').getTime() / 1000));
+    // 2024-01-15 23:59:59 UTC
+    expect(end).toBe(Math.floor(new Date('2024-01-15T23:59:59Z').getTime() / 1000));
+  });
+
+  it('start は end より小さい', () => {
+    const { start, end } = getDateUnixRange('2024-06-30');
+    expect(start).toBeLessThan(end);
+  });
+
+  it('異なる日付で異なる範囲を返す', () => {
+    const day1 = getDateUnixRange('2024-01-15');
+    const day2 = getDateUnixRange('2024-01-16');
+
+    expect(day2.start).toBeGreaterThan(day1.end);
   });
 });

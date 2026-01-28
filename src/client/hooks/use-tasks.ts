@@ -122,13 +122,13 @@ export function useTasksByShareToken(
 }
 
 // Time Entry Hooks
-export function useTimeEntries(workspaceId: string, taskId: string) {
+export function useTimeEntries(workspaceId: string, taskId: string, options?: { date?: string }) {
   const queryClient = useQueryClient();
   const { updateTask } = useTaskStore();
 
   const listQuery = useQuery({
-    queryKey: timeEntryKeys.list(workspaceId, taskId),
-    queryFn: () => timeEntryApi.list(workspaceId, taskId),
+    queryKey: [...timeEntryKeys.list(workspaceId, taskId), options?.date] as const,
+    queryFn: () => timeEntryApi.list(workspaceId, taskId, options?.date ? { date: options.date } : undefined),
     enabled: Boolean(workspaceId) && Boolean(taskId),
   });
 
