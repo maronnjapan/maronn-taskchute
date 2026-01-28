@@ -30,7 +30,7 @@ export const timeEntryKeys = {
 
 export function useTasks(workspaceId: string, options?: { date?: string; status?: string }) {
   const queryClient = useQueryClient();
-  const { setTasks, addTask, updateTask, removeTask, reorderTasks } = useTaskStore();
+  const { tasks, setTasks, addTask, updateTask, removeTask, reorderTasks } = useTaskStore();
 
   const listQuery = useQuery({
     queryKey: taskKeys.list(workspaceId, options),
@@ -88,7 +88,7 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
   });
 
   return {
-    tasks: listQuery.data ?? [],
+    tasks,
     isLoading: listQuery.isLoading,
     error: listQuery.error,
     create: createMutation.mutate,

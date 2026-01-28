@@ -17,7 +17,7 @@ import {
   ShareLinkDisplay,
   TimeEntryListModal,
 } from '../components/features';
-import { timeEntryApi } from '../services/api-client';
+import { timeEntryApi, taskApi } from '../services/api-client';
 import type { Task, TimeEntry } from '../../shared/types/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
 
@@ -25,7 +25,7 @@ export function TaskListPage() {
   const { isAuthenticated, isLoading: isAuthLoading, login } = useAuth();
   const { workspaces, create: createWorkspace, isCreating: isCreatingWorkspace } = useWorkspaces();
   const { currentWorkspaceId, setCurrentWorkspaceId } = useWorkspaceStore();
-  const { selectedDate } = useTaskStore();
+  const { selectedDate, updateTask: updateTaskInStore } = useTaskStore();
   const {
     isTaskFormOpen,
     isWorkspaceFormOpen,
@@ -38,8 +38,8 @@ export function TaskListPage() {
   // Track active time entries per task (manual updates)
   const [manualActiveTimeEntries, setManualActiveTimeEntries] = useState<Map<string, TimeEntry>>(new Map());
 
-  // Track task for time entry modal
-  const [viewingTimeEntriesTask, setViewingTimeEntriesTask] = useState<Task | null>(null);
+  // Track task ID for time entry modal (use ID so we can always get latest task from store)
+  const [viewingTimeEntriesTaskId, setViewingTimeEntriesTaskId] = useState<string | null>(null);
 
   // Auto-select first workspace if none selected
   const activeWorkspaceId = useMemo(() => {
@@ -76,6 +76,12 @@ export function TaskListPage() {
   const editingTask = useMemo(
     () => (editingTaskId ? tasks.find((t) => t.id === editingTaskId) : undefined),
     [editingTaskId, tasks]
+  );
+
+  // Get the task for time entry modal (always latest from store)
+  const viewingTimeEntriesTask = useMemo(
+    () => (viewingTimeEntriesTaskId ? tasks.find((t) => t.id === viewingTimeEntriesTaskId) : undefined),
+    [viewingTimeEntriesTaskId, tasks]
   );
 
   // Fetch average duration for repeating tasks to use as default estimated time
@@ -179,19 +185,22 @@ export function TaskListPage() {
           next.delete(taskId);
           return next;
         });
+        // タスクの実績時間を更新するため、最新のタスク情報を取得してストアを更新
+        const updatedTask = await taskApi.get(activeWorkspaceId, taskId);
+        updateTaskInStore(updatedTask.id, updatedTask);
       } catch (error) {
         console.error('Failed to stop time entry:', error);
       }
     },
-    [activeWorkspaceId]
+    [activeWorkspaceId, updateTaskInStore]
   );
 
   const handleViewTimeEntries = useCallback((task: Task) => {
-    setViewingTimeEntriesTask(task);
+    setViewingTimeEntriesTaskId(task.id);
   }, []);
 
   const handleCloseTimeEntries = useCallback(() => {
-    setViewingTimeEntriesTask(null);
+    setViewingTimeEntriesTaskId(null);
   }, []);
 
   // Loading state
