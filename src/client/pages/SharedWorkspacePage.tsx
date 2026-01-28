@@ -144,7 +144,8 @@ export function SharedWorkspacePage() {
           next.delete(taskId);
           return next;
         });
-        void refetchTasks();
+        // タスクの実績時間を更新するため、再取得を待つ
+        await refetchTasks();
       } catch (error) {
         console.error('Failed to stop time entry:', error);
       }
