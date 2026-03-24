@@ -68,6 +68,20 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     },
   });
 
+  const carryOverMutation = useMutation({
+    mutationFn: (fromDate: string) => taskApi.carryOver(workspaceId, fromDate),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+    },
+  });
+
+  const copyToNextDayMutation = useMutation({
+    mutationFn: (taskId: string) => taskApi.copyToNextDay(workspaceId, taskId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+    },
+  });
+
   const reorderMutation = useMutation({
     mutationFn: (input: ReorderTasksInput) => taskApi.reorder(workspaceId, input),
     onMutate: (input) => {
@@ -95,10 +109,14 @@ export function useTasks(workspaceId: string, options?: { date?: string; status?
     update: updateMutation.mutate,
     delete: deleteMutation.mutate,
     reorder: reorderMutation.mutate,
+    carryOver: carryOverMutation.mutate,
+    copyToNextDay: copyToNextDayMutation.mutate,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isReordering: reorderMutation.isPending,
+    isCarryingOver: carryOverMutation.isPending,
+    isCopying: copyToNextDayMutation.isPending,
   };
 }
 

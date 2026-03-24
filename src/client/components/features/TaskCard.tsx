@@ -11,6 +11,7 @@ interface TaskCardProps {
   onStartTimeEntry?: (taskId: string) => void;
   onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   onViewTimeEntries?: (task: Task) => void;
+  onCopyToNextDay?: (taskId: string) => void;
   isDragging?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
@@ -23,6 +24,7 @@ export function TaskCard({
   onStartTimeEntry,
   onStopTimeEntry,
   onViewTimeEntries,
+  onCopyToNextDay,
   isDragging = false,
   dragHandleProps,
 }: TaskCardProps) {
@@ -109,6 +111,11 @@ export function TaskCard({
             {onEdit && (
               <Button size="sm" variant="ghost" onClick={() => onEdit(task)}>
                 編集
+              </Button>
+            )}
+            {onCopyToNextDay && !task.repeatPattern && (
+              <Button size="sm" variant="ghost" onClick={() => onCopyToNextDay(task.id)}>
+                翌日にコピー
               </Button>
             )}
             {onDelete && !isRecording && (

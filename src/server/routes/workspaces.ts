@@ -14,6 +14,7 @@ import {
   createTaskSchema,
   updateTaskSchema,
   reorderTasksSchema,
+  carryOverTasksSchema,
   updateTimeEntrySchema,
 } from '../../shared/validators/index';
 import type { User, TaskStatus } from '../../shared/types/index';
@@ -250,6 +251,46 @@ workspaces.post('/:id/tasks/reorder', zValidator('json', reorderTasksSchema), as
 
   const tasks = await taskService.reorderTasks(workspaceId, input);
   return c.json({ data: tasks });
+});
+
+// POST /api/workspaces/:id/tasks/carry-over - Carry over pending tasks to next day
+workspaces.post('/:id/tasks/carry-over', zValidator('json', carryOverTasksSchema), async (c) => {
+  const workspaceId = c.req.param('id');
+  const userId = c.get('userId');
+  const input = c.req.valid('json');
+  const { workspaceService, taskService } = getServices(c.env.DB);
+
+  // Verify workspace access
+  const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+  if (!canAccess) {
+    throw forbiddenError('Access denied');
+  }
+
+  const tasks = await taskService.carryOverTasks(workspaceId, input.fromDate);
+  return c.json({ data: tasks });
+});
+
+// POST /api/workspaces/:id/tasks/:taskId/copy-to-next-day - Copy task to next day
+workspaces.post('/:id/tasks/:taskId/copy-to-next-day', async (c) => {
+  const workspaceId = c.req.param('id');
+  const taskId = c.req.param('taskId');
+  const userId = c.get('userId');
+  const { workspaceService, taskService } = getServices(c.env.DB);
+
+  // Verify workspace access
+  const canAccess = await workspaceService.canAccessWorkspace(workspaceId, userId);
+  if (!canAccess) {
+    throw forbiddenError('Access denied');
+  }
+
+  // Verify task belongs to workspace
+  const belongsTo = await taskService.belongsToWorkspace(taskId, workspaceId);
+  if (!belongsTo) {
+    throw notFoundError('Task not found');
+  }
+
+  const task = await taskService.copyTaskToNextDay(taskId);
+  return c.json({ data: task }, 201);
 });
 
 // ============ Time Entry routes ============

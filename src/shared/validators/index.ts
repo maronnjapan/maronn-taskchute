@@ -47,6 +47,10 @@ export const reorderTasksSchema = z.object({
   taskIds: z.array(z.string().uuid()),
 });
 
+export const carryOverTasksSchema = z.object({
+  fromDate: dateStringSchema,
+});
+
 // Time entry schemas
 export const startTimeEntrySchema = z.object({
   taskId: z.string().uuid(),
@@ -90,6 +94,7 @@ export const taskQuerySchema = z.object({
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type ReorderTasksInput = z.infer<typeof reorderTasksSchema>;
+export type CarryOverTasksInput = z.infer<typeof carryOverTasksSchema>;
 export type StartTimeEntryInput = z.infer<typeof startTimeEntrySchema>;
 export type StopTimeEntryInput = z.infer<typeof stopTimeEntrySchema>;
 export type UpdateTimeEntryInput = z.infer<typeof updateTimeEntrySchema>;

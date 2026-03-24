@@ -172,6 +172,26 @@ export const taskApi = {
     return result.data;
   },
 
+  async carryOver(workspaceId: string, fromDate: string): Promise<Task[]> {
+    const response = await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/tasks/carry-over`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ fromDate }),
+    });
+    const result = await handleResponse<ApiResponse<Task[]>>(response);
+    return result.data;
+  },
+
+  async copyToNextDay(workspaceId: string, taskId: string): Promise<Task> {
+    const response = await fetch(`${BASE_URL}/api/workspaces/${workspaceId}/tasks/${taskId}/copy-to-next-day`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    const result = await handleResponse<ApiResponse<Task>>(response);
+    return result.data;
+  },
+
   async listByShareToken(shareToken: string, options?: { date?: string; status?: string }): Promise<Task[]> {
     const params = new URLSearchParams();
     if (options?.date) params.set('date', options.date);
