@@ -25,6 +25,7 @@ interface JwtPayload {
   iss?: unknown;
   aud?: unknown;
   azp?: unknown;
+  client_id?: unknown;
 }
 
 function decodeJwtPayload(token: string): JwtPayload | null {
@@ -44,7 +45,7 @@ function decodeJwtPayload(token: string): JwtPayload | null {
 
 function isTokenBoundToApp(payload: JwtPayload, env: Bindings): boolean {
   const expectedIssuer = `https://${env.AUTH0_DOMAIN}/`;
-  const { iss, aud, azp } = payload;
+  const { iss, aud, azp, client_id: clientIdClaim } = payload;
 
   if (iss !== expectedIssuer) {
     return false;
@@ -58,9 +59,12 @@ function isTokenBoundToApp(payload: JwtPayload, env: Bindings): boolean {
     return false;
   }
 
-  // When multiple audiences are present, Auth0 includes `azp` for the authorized party (client ID).
-  // Enforce that binding to ensure tokens from other applications cannot create sessions.
-  return typeof azp === 'string' && azp === env.AUTH0_CLIENT_ID;
+  // Auth0 can encode the client binding as `azp` or `client_id` (RFC 9068 profile).
+  // Accept either claim and enforce that it matches this application's Auth0 client ID.
+  const boundClientId =
+    typeof azp === 'string' ? azp : typeof clientIdClaim === 'string' ? clientIdClaim : null;
+
+  return boundClientId === env.AUTH0_CLIENT_ID;
 }
 
 function getAuthService(c: { env: Bindings }) {
