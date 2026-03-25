@@ -21,6 +21,48 @@ interface Variables {
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+interface JwtPayload {
+  iss?: unknown;
+  aud?: unknown;
+  azp?: unknown;
+}
+
+function decodeJwtPayload(token: string): JwtPayload | null {
+  const tokenParts = token.split('.');
+  if (tokenParts.length !== 3) return null;
+
+  const payloadPart = tokenParts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const paddedPayload = payloadPart.padEnd(Math.ceil(payloadPart.length / 4) * 4, '=');
+
+  try {
+    const decodedPayload = atob(paddedPayload);
+    return JSON.parse(decodedPayload) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+function isTokenBoundToApp(payload: JwtPayload, env: Bindings): boolean {
+  const expectedIssuer = `https://${env.AUTH0_DOMAIN}/`;
+  const { iss, aud, azp } = payload;
+
+  if (iss !== expectedIssuer) {
+    return false;
+  }
+
+  const audienceIncludesApi =
+    (typeof aud === 'string' && aud === env.AUTH0_AUDIENCE) ||
+    (Array.isArray(aud) && aud.includes(env.AUTH0_AUDIENCE));
+
+  if (!audienceIncludesApi) {
+    return false;
+  }
+
+  // When multiple audiences are present, Auth0 includes `azp` for the authorized party (client ID).
+  // Enforce that binding to ensure tokens from other applications cannot create sessions.
+  return typeof azp === 'string' && azp === env.AUTH0_CLIENT_ID;
+}
+
 function getAuthService(c: { env: Bindings }) {
   const userRepo = new UserRepository(c.env.DB);
   const sessionRepo = new SessionRepository(c.env.DB);
@@ -129,6 +171,15 @@ auth.post('/token-login', async (c) => {
   }
 
   try {
+    const tokenPayload = decodeJwtPayload(accessToken);
+    if (!tokenPayload) {
+      return c.json({ error: { code: 'invalid_token', message: 'Access token is malformed' } }, 401);
+    }
+
+    if (!isTokenBoundToApp(tokenPayload, c.env)) {
+      return c.json({ error: { code: 'invalid_token', message: 'Access token is not valid for this application' } }, 401);
+    }
+
     // Validate token by fetching user info from Auth0
     const userInfoResponse = await fetch(`https://${c.env.AUTH0_DOMAIN}/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` },
