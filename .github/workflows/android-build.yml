@@ -34,6 +34,8 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+        env:
+          CAPACITOR_SERVER_URL: ${{ vars.CAPACITOR_SERVER_URL }}
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug

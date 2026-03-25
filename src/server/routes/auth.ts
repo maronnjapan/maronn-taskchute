@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { AuthService } from '../services/auth-service';
 import { UserRepository } from '../repositories/user-repository';
 import { SessionRepository } from '../repositories/session-repository';
-import { AuthCodeRepository } from '../repositories/auth-code-repository';
 import { generateId, generateCodeVerifier, generateCodeChallenge } from '../../shared/utils/index';
 import type { User } from '../../shared/types/index';
 
@@ -32,10 +31,6 @@ function getAuthService(c: { env: Bindings }) {
     callbackUrl: c.env.AUTH0_CALLBACK_URL,
     audience: c.env.AUTH0_AUDIENCE,
   });
-}
-
-function getAuthCodeRepo(c: { env: Bindings }) {
-  return new AuthCodeRepository(c.env.DB);
 }
 
 // GET /auth/login - Redirect to Auth0 login
@@ -126,10 +121,9 @@ auth.get('/callback', async (c) => {
     });
 
     if (authPlatform === 'mobile') {
-      // For mobile: generate a one-time auth code and redirect to the app via deep link
-      const authCodeRepo = getAuthCodeRepo(c);
-      const authCode = await authCodeRepo.create(session.id, generateId());
-      return c.redirect(`com.maronn.taskchute://callback?code=${authCode.code}&verifier=${authCode.verifier}`);
+      // For mobile: pass session ID directly via deep link
+      // The app will call /auth/exchange to set the cookie in the WebView context
+      return c.redirect(`com.maronn.taskchute://callback?session=${session.id}`);
     }
 
     return c.redirect('/');
@@ -160,30 +154,23 @@ auth.post('/logout', async (c) => {
   return c.json({ logoutUrl });
 });
 
-// POST /auth/exchange - Exchange a one-time auth code for a session cookie (mobile flow)
-auth.post('/exchange', async (c) => {
-  const body = await c.req.json<unknown>().catch(() => null);
-  const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string' ? body.code.trim() : '';
-  const verifier =
-    typeof body === 'object' && body !== null && 'verifier' in body && typeof body.verifier === 'string'
-      ? body.verifier.trim()
-      : '';
-
-  if (!code) {
-    return c.json({ error: { code: 'missing_code', message: 'Auth code is required' } }, 400);
-  }
-  if (!verifier) {
-    return c.json({ error: { code: 'missing_verifier', message: 'Auth code verifier is required' } }, 400);
-  }
-
-  const authCodeRepo = getAuthCodeRepo(c);
-  const sessionId = await authCodeRepo.exchange(code, verifier);
+// GET /auth/exchange - Set session cookie in WebView context (mobile flow)
+// The session ID is passed from the deep link after browser-based Auth0 login
+auth.get('/exchange', async (c) => {
+  const sessionId = c.req.query('session');
 
   if (!sessionId) {
-    return c.json({ error: { code: 'invalid_code', message: 'Auth code is invalid or expired' } }, 401);
+    return c.json({ error: { code: 'missing_session', message: 'Session ID is required' } }, 400);
   }
 
+  // Validate the session exists and is still valid
   const authService = getAuthService(c);
+  const result = await authService.validateSession(sessionId);
+
+  if (!result) {
+    return c.json({ error: { code: 'invalid_session', message: 'Session is invalid or expired' } }, 401);
+  }
+
   authService.setSessionCookie(c, sessionId);
 
   return c.json({ data: { success: true } });

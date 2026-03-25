@@ -4,23 +4,12 @@ import { App } from '@capacitor/app';
 import { isNativePlatform } from '../utils/capacitor';
 import { authKeys } from './use-auth';
 
-async function exchangeAuthCode({
-  code,
-  verifier,
-}: {
-  code: string;
-  verifier: string;
-}): Promise<void> {
-  const response = await fetch('/auth/exchange', {
-    method: 'POST',
+async function setSessionCookie(sessionId: string): Promise<void> {
+  const response = await fetch(`/auth/exchange?session=${encodeURIComponent(sessionId)}`, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code, verifier }),
   });
   if (!response.ok) {
-    throw new Error('Failed to exchange auth code');
+    throw new Error('Failed to set session');
   }
 }
 
@@ -29,9 +18,8 @@ export function useDeepLink() {
   const listenerAdded = useRef(false);
 
   const exchangeMutation = useMutation({
-    mutationFn: exchangeAuthCode,
+    mutationFn: setSessionCookie,
     onSuccess: () => {
-      // Refresh auth state after successful code exchange
       void queryClient.invalidateQueries({ queryKey: authKeys.me() });
     },
   });
@@ -48,8 +36,7 @@ export function useDeepLink() {
       const url = new URL(event.url);
 
       if (url.host === 'callback') {
-        const code = url.searchParams.get('code');
-        const verifier = url.searchParams.get('verifier');
+        const sessionId = url.searchParams.get('session');
         const error = url.searchParams.get('error');
 
         if (error) {
@@ -57,8 +44,8 @@ export function useDeepLink() {
           return;
         }
 
-        if (code && verifier) {
-          exchangeMutation.mutate({ code, verifier });
+        if (sessionId) {
+          exchangeMutation.mutate(sessionId);
         }
       }
     });
