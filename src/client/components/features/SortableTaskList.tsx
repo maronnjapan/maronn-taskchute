@@ -30,6 +30,7 @@ interface SortableTaskItemProps {
   onStartTimeEntry?: (taskId: string) => void;
   onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   onViewTimeEntries?: (task: Task) => void;
+  onCopyToNextDay?: (taskId: string) => void;
 }
 
 function SortableTaskItem({
@@ -40,6 +41,7 @@ function SortableTaskItem({
   onStartTimeEntry,
   onStopTimeEntry,
   onViewTimeEntries,
+  onCopyToNextDay,
 }: SortableTaskItemProps) {
   const {
     attributes,
@@ -65,6 +67,7 @@ function SortableTaskItem({
         onStartTimeEntry={onStartTimeEntry}
         onStopTimeEntry={onStopTimeEntry}
         onViewTimeEntries={onViewTimeEntries}
+        onCopyToNextDay={onCopyToNextDay}
         isDragging={isDragging}
         dragHandleProps={{ ...attributes, ...listeners }}
       />
@@ -80,6 +83,7 @@ interface SortableTaskListProps {
   onStartTimeEntry?: (taskId: string) => void;
   onStopTimeEntry?: (taskId: string, timeEntryId: string) => void;
   onViewTimeEntries?: (task: Task) => void;
+  onCopyToNextDay?: (taskId: string) => void;
   onReorder?: (taskIds: string[]) => void;
   emptyMessage?: string;
 }
@@ -92,6 +96,7 @@ export function SortableTaskList({
   onStartTimeEntry,
   onStopTimeEntry,
   onViewTimeEntries,
+  onCopyToNextDay,
   onReorder,
   emptyMessage = 'タスクがありません',
 }: SortableTaskListProps) {
@@ -221,6 +226,7 @@ export function SortableTaskList({
               onStartTimeEntry={onStartTimeEntry}
               onStopTimeEntry={onStopTimeEntry}
               onViewTimeEntries={onViewTimeEntries}
+              onCopyToNextDay={onCopyToNextDay}
             />
           ))}
         </div>

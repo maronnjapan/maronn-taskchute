@@ -6,6 +6,7 @@ import type {
   UpdateTaskInput,
   ReorderTasksInput,
 } from '../../shared/validators/index';
+import { addDaysToDateString } from '../../shared/utils/index';
 
 export class TaskService {
   constructor(
@@ -132,5 +133,46 @@ export class TaskService {
   // Get all repeating tasks for a workspace
   async getRepeatingTasks(workspaceId: string): Promise<Task[]> {
     return this.taskRepo.findRepeatingByWorkspaceId(workspaceId);
+  }
+
+  // Carry over pending non-repeating tasks to the next day
+  async carryOverTasks(workspaceId: string, fromDate: string): Promise<Task[]> {
+    const tasks = await this.taskRepo.findByWorkspaceId(workspaceId, { date: fromDate });
+    const targetDate = addDaysToDateString(fromDate, 1);
+
+    const pendingNonRepeating = tasks.filter(
+      (t) => t.status === 'pending' && !t.repeatPattern
+    );
+
+    const results: Task[] = [];
+    for (const task of pendingNonRepeating) {
+      const updated = await this.taskRepo.update(task.id, { scheduledDate: targetDate });
+      if (updated) {
+        results.push(updated);
+      }
+    }
+
+    return results;
+  }
+
+  // Copy a non-repeating task to the next day
+  async copyTaskToNextDay(taskId: string): Promise<Task> {
+    const task = await this.taskRepo.findById(taskId);
+    if (!task) {
+      throw new Error('タスクが見つかりません');
+    }
+    if (task.repeatPattern) {
+      throw new Error('繰り返しタスクはコピーできません');
+    }
+
+    const targetDate = addDaysToDateString(task.scheduledDate, 1);
+
+    return this.taskRepo.create({
+      workspaceId: task.workspaceId,
+      title: task.title,
+      description: task.description,
+      scheduledDate: targetDate,
+      estimatedMinutes: task.estimatedMinutes,
+    });
   }
 }

@@ -448,4 +448,157 @@ describe('TaskService (実際のクラス)', () => {
       expect(mockTimeEntryRepo.getDailyDurationsByTaskIds).not.toHaveBeenCalled();
     });
   });
+
+  describe('carryOverTasks', () => {
+    const pendingTask1: SharedTask = {
+      id: 'task-1',
+      workspaceId: 'ws-1',
+      title: '未着手タスク1',
+      scheduledDate: '2024-01-15',
+      sortOrder: 0,
+      status: 'pending',
+      estimatedMinutes: 30,
+      createdAt: 1705305600,
+      updatedAt: 1705305600,
+    };
+
+    const pendingTask2: SharedTask = {
+      id: 'task-2',
+      workspaceId: 'ws-1',
+      title: '未着手タスク2',
+      description: 'テスト説明',
+      scheduledDate: '2024-01-15',
+      sortOrder: 1,
+      status: 'pending',
+      estimatedMinutes: 60,
+      createdAt: 1705305600,
+      updatedAt: 1705305600,
+    };
+
+    const inProgressTask: SharedTask = {
+      id: 'task-3',
+      workspaceId: 'ws-1',
+      title: '進行中タスク',
+      scheduledDate: '2024-01-15',
+      sortOrder: 2,
+      status: 'in_progress',
+      createdAt: 1705305600,
+      updatedAt: 1705305600,
+    };
+
+    const repeatingPendingTask: SharedTask = {
+      id: 'task-4',
+      workspaceId: 'ws-1',
+      title: '繰り返しタスク',
+      scheduledDate: '2024-01-01',
+      sortOrder: 3,
+      status: 'pending',
+      repeatPattern: 'daily',
+      createdAt: 1705305600,
+      updatedAt: 1705305600,
+    };
+
+    it('未着手の非繰り返しタスクを翌日に繰り越せる', async () => {
+      vi.mocked(mockTaskRepo.findByWorkspaceId).mockResolvedValue([pendingTask1, pendingTask2, inProgressTask, repeatingPendingTask]);
+      vi.mocked(mockTaskRepo.update).mockImplementation((id, input) => Promise.resolve({
+        ...pendingTask1,
+        id,
+        scheduledDate: input.scheduledDate ?? pendingTask1.scheduledDate,
+      }));
+
+      const result = await service.carryOverTasks('ws-1', '2024-01-15');
+
+      // 2つの未着手非繰り返しタスクが繰り越される
+      expect(result).toHaveLength(2);
+      expect(mockTaskRepo.update).toHaveBeenCalledTimes(2);
+      expect(mockTaskRepo.update).toHaveBeenCalledWith('task-1', { scheduledDate: '2024-01-16' });
+      expect(mockTaskRepo.update).toHaveBeenCalledWith('task-2', { scheduledDate: '2024-01-16' });
+    });
+
+    it('繰り返しタスクは繰り越し対象にならない', async () => {
+      vi.mocked(mockTaskRepo.findByWorkspaceId).mockResolvedValue([repeatingPendingTask]);
+
+      const result = await service.carryOverTasks('ws-1', '2024-01-15');
+
+      expect(result).toHaveLength(0);
+      expect(mockTaskRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('進行中タスクは繰り越し対象にならない', async () => {
+      vi.mocked(mockTaskRepo.findByWorkspaceId).mockResolvedValue([inProgressTask]);
+
+      const result = await service.carryOverTasks('ws-1', '2024-01-15');
+
+      expect(result).toHaveLength(0);
+      expect(mockTaskRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('対象タスクがない場合は空配列を返す', async () => {
+      vi.mocked(mockTaskRepo.findByWorkspaceId).mockResolvedValue([]);
+
+      const result = await service.carryOverTasks('ws-1', '2024-01-15');
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('copyTaskToNextDay', () => {
+    const task: SharedTask = {
+      id: 'task-1',
+      workspaceId: 'ws-1',
+      title: 'コピー元タスク',
+      description: 'テスト説明',
+      scheduledDate: '2024-01-15',
+      sortOrder: 0,
+      status: 'pending',
+      estimatedMinutes: 30,
+      createdAt: 1705305600,
+      updatedAt: 1705305600,
+    };
+
+    const repeatingTask: SharedTask = {
+      ...task,
+      id: 'task-2',
+      repeatPattern: 'daily',
+    };
+
+    it('非繰り返しタスクを翌日にコピーできる', async () => {
+      const copiedTask: SharedTask = {
+        ...task,
+        id: 'task-new',
+        scheduledDate: '2024-01-16',
+        status: 'pending',
+        actualMinutes: undefined,
+        startedAt: undefined,
+      };
+
+      vi.mocked(mockTaskRepo.findById).mockResolvedValue(task);
+      vi.mocked(mockTaskRepo.create).mockResolvedValue(copiedTask);
+
+      const result = await service.copyTaskToNextDay('task-1');
+
+      expect(result).toBeDefined();
+      expect(mockTaskRepo.create).toHaveBeenCalledWith({
+        workspaceId: 'ws-1',
+        title: 'コピー元タスク',
+        description: 'テスト説明',
+        scheduledDate: '2024-01-16',
+        estimatedMinutes: 30,
+      });
+    });
+
+    it('繰り返しタスクはコピーできない', async () => {
+      vi.mocked(mockTaskRepo.findById).mockResolvedValue(repeatingTask);
+
+      await expect(service.copyTaskToNextDay('task-2'))
+        .rejects.toThrow('繰り返しタスクはコピーできません');
+    });
+
+    it('存在しないタスクをコピーしようとするとエラーを返す', async () => {
+      vi.mocked(mockTaskRepo.findById).mockResolvedValue(null);
+
+      await expect(service.copyTaskToNextDay('non-existent'))
+        .rejects.toThrow('タスクが見つかりません');
+    });
+  });
 });

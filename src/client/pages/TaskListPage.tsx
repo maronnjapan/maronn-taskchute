@@ -65,8 +65,11 @@ export function TaskListPage() {
     update: updateTask,
     delete: deleteTask,
     reorder,
+    carryOver,
+    copyToNextDay,
     isCreating,
     isUpdating,
+    isCarryingOver,
   } = useTasks(activeWorkspaceId ?? '', { date: selectedDate });
 
   // Fetch active time entries from server
@@ -195,6 +198,19 @@ export function TaskListPage() {
     [activeWorkspaceId, updateTaskInStore]
   );
 
+  const handleCarryOver = useCallback(() => {
+    if (confirm('未着手の非繰り返しタスクを翌日に繰り越しますか？')) {
+      carryOver(selectedDate);
+    }
+  }, [carryOver, selectedDate]);
+
+  const handleCopyToNextDay = useCallback(
+    (taskId: string) => {
+      copyToNextDay(taskId);
+    },
+    [copyToNextDay]
+  );
+
   const handleViewTimeEntries = useCallback((task: Task) => {
     setViewingTimeEntriesTaskId(task.id);
   }, []);
@@ -274,6 +290,9 @@ export function TaskListPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button onClick={() => openTaskForm()}>新規タスク</Button>
+            <Button variant="secondary" onClick={handleCarryOver} disabled={isCarryingOver}>
+              {isCarryingOver ? '繰り越し中...' : '未着手を翌日に繰り越し'}
+            </Button>
           </div>
         </div>
       </div>
@@ -297,6 +316,7 @@ export function TaskListPage() {
           onStartTimeEntry={handleStartTimeEntry}
           onStopTimeEntry={handleStopTimeEntry}
           onViewTimeEntries={handleViewTimeEntries}
+          onCopyToNextDay={handleCopyToNextDay}
           onReorder={(taskIds) => reorder({ taskIds })}
           emptyMessage="この日にタスクはありません。新規タスクを追加してください。"
         />
