@@ -1,12 +1,23 @@
 import { useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { App, type URLOpenListenerEvent } from '@capacitor/app';
+import { App } from '@capacitor/app';
 import { isNativePlatform } from '../utils/capacitor';
 import { authKeys } from './use-auth';
 
-async function exchangeAuthCode(code: string): Promise<void> {
-  const response = await fetch(`/auth/exchange?code=${encodeURIComponent(code)}`, {
+async function exchangeAuthCode({
+  code,
+  verifier,
+}: {
+  code: string;
+  verifier: string;
+}): Promise<void> {
+  const response = await fetch('/auth/exchange', {
+    method: 'POST',
     credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ code, verifier }),
   });
   if (!response.ok) {
     throw new Error('Failed to exchange auth code');
@@ -29,11 +40,16 @@ export function useDeepLink() {
     if (!isNativePlatform() || listenerAdded.current) return;
     listenerAdded.current = true;
 
-    void App.addListener('appUrlOpen', (event: URLOpenListenerEvent) => {
+    const capacitorApp = App as unknown as {
+      addListener: (eventName: 'appUrlOpen', listenerFunc: (event: { url: string }) => void) => Promise<void>;
+    };
+
+    void capacitorApp.addListener('appUrlOpen', (event) => {
       const url = new URL(event.url);
 
       if (url.host === 'callback') {
         const code = url.searchParams.get('code');
+        const verifier = url.searchParams.get('verifier');
         const error = url.searchParams.get('error');
 
         if (error) {
@@ -41,8 +57,8 @@ export function useDeepLink() {
           return;
         }
 
-        if (code) {
-          exchangeMutation.mutate(code);
+        if (code && verifier) {
+          exchangeMutation.mutate({ code, verifier });
         }
       }
     });

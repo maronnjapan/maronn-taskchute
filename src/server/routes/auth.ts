@@ -55,11 +55,9 @@ auth.get('/login', async (c) => {
   c.header('Set-Cookie', `code_verifier=${codeVerifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
     append: true,
   });
-  if (platform === 'mobile') {
-    c.header('Set-Cookie', `auth_platform=mobile; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
-      append: true,
-    });
-  }
+  c.header('Set-Cookie', `auth_platform=${platform === 'mobile' ? 'mobile' : ''}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
+    append: true,
+  });
 
   const loginUrl = authService.getLoginUrl(state, codeChallenge);
   return c.redirect(loginUrl);
@@ -68,6 +66,8 @@ auth.get('/login', async (c) => {
 // GET /auth/callback - Handle Auth0 callback
 auth.get('/callback', async (c) => {
   const authService = getAuthService(c);
+  const cookie = c.req.header('Cookie');
+  const authPlatform = cookie ? /auth_platform=([^;]+)/.exec(cookie)?.[1] : undefined;
 
   const code = c.req.query('code');
   const state = c.req.query('state');
@@ -77,28 +77,36 @@ auth.get('/callback', async (c) => {
   // Check for Auth0 error
   if (error) {
     console.error('Auth0 error:', error, errorDescription);
+    if (authPlatform === 'mobile') {
+      return c.redirect(`com.maronn.taskchute://callback?error=${encodeURIComponent(error)}`);
+    }
     return c.redirect('/?error=auth_failed');
   }
 
   if (!code) {
+    if (authPlatform === 'mobile') {
+      return c.redirect('com.maronn.taskchute://callback?error=no_code');
+    }
     return c.redirect('/?error=no_code');
   }
 
   // Verify state (CSRF protection)
-  const cookie = c.req.header('Cookie');
   const storedState = cookie?.match(/auth_state=([^;]+)/)?.[1];
   const codeVerifier = cookie?.match(/code_verifier=([^;]+)/)?.[1];
 
   if (!storedState || storedState !== state) {
+    if (authPlatform === 'mobile') {
+      return c.redirect('com.maronn.taskchute://callback?error=invalid_state');
+    }
     return c.redirect('/?error=invalid_state');
   }
 
   if (!codeVerifier) {
+    if (authPlatform === 'mobile') {
+      return c.redirect('com.maronn.taskchute://callback?error=missing_code_verifier');
+    }
     return c.redirect('/?error=missing_code_verifier');
   }
-
-  // Check if this is a mobile auth flow
-  const authPlatform = cookie ? /auth_platform=([^;]+)/.exec(cookie)?.[1] : undefined;
 
   try {
     const { session } = await authService.handleCallback(code, codeVerifier);
@@ -120,8 +128,8 @@ auth.get('/callback', async (c) => {
     if (authPlatform === 'mobile') {
       // For mobile: generate a one-time auth code and redirect to the app via deep link
       const authCodeRepo = getAuthCodeRepo(c);
-      const authCode = await authCodeRepo.create(session.id);
-      return c.redirect(`com.maronn.taskchute://callback?code=${authCode}`);
+      const authCode = await authCodeRepo.create(session.id, generateId());
+      return c.redirect(`com.maronn.taskchute://callback?code=${authCode.code}&verifier=${authCode.verifier}`);
     }
 
     return c.redirect('/');
@@ -152,16 +160,24 @@ auth.post('/logout', async (c) => {
   return c.json({ logoutUrl });
 });
 
-// GET /auth/exchange - Exchange a one-time auth code for a session cookie (mobile flow)
-auth.get('/exchange', async (c) => {
-  const code = c.req.query('code');
+// POST /auth/exchange - Exchange a one-time auth code for a session cookie (mobile flow)
+auth.post('/exchange', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => null);
+  const code = typeof body === 'object' && body !== null && 'code' in body && typeof body.code === 'string' ? body.code.trim() : '';
+  const verifier =
+    typeof body === 'object' && body !== null && 'verifier' in body && typeof body.verifier === 'string'
+      ? body.verifier.trim()
+      : '';
 
   if (!code) {
     return c.json({ error: { code: 'missing_code', message: 'Auth code is required' } }, 400);
   }
+  if (!verifier) {
+    return c.json({ error: { code: 'missing_verifier', message: 'Auth code verifier is required' } }, 400);
+  }
 
   const authCodeRepo = getAuthCodeRepo(c);
-  const sessionId = await authCodeRepo.exchange(code);
+  const sessionId = await authCodeRepo.exchange(code, verifier);
 
   if (!sessionId) {
     return c.json({ error: { code: 'invalid_code', message: 'Auth code is invalid or expired' } }, 401);
