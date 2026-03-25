@@ -1,7 +1,6 @@
--- Bind one-time mobile auth codes to the login initiator
-ALTER TABLE auth_codes ADD COLUMN verifier TEXT;
-
--- Backfill existing rows (if any) to keep schema compatible, then enforce not-null in app logic.
-UPDATE auth_codes SET verifier = '' WHERE verifier IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_auth_codes_verifier ON auth_codes(verifier);
+-- No-op migration.
+--
+-- The previous version attempted to ALTER auth_codes, but this repository's
+-- migration chain does not create that table. Keep this migration as a no-op
+-- to preserve already-applied migration numbering while allowing clean setup.
+SELECT 1;
