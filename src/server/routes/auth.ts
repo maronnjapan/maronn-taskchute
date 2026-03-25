@@ -33,7 +33,18 @@ function getAuthService(c: { env: Bindings }) {
   });
 }
 
-// GET /auth/login - Redirect to Auth0 login
+// GET /auth/config - Return public Auth0 config for mobile SDK initialization
+auth.get('/config', (c) => {
+  return c.json({
+    data: {
+      domain: c.env.AUTH0_DOMAIN,
+      clientId: c.env.AUTH0_CLIENT_ID,
+      audience: c.env.AUTH0_AUDIENCE,
+    },
+  });
+});
+
+// GET /auth/login - Redirect to Auth0 login (web flow)
 auth.get('/login', async (c) => {
   const authService = getAuthService(c);
   const state = generateId();
@@ -42,15 +53,9 @@ auth.get('/login', async (c) => {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  // Detect mobile platform (passed as query param from Capacitor app)
-  const platform = c.req.query('platform') ?? '';
-
-  // Store state, code_verifier, and platform in cookies for CSRF protection and PKCE
+  // Store state and code_verifier in cookies for CSRF protection and PKCE
   c.header('Set-Cookie', `auth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
   c.header('Set-Cookie', `code_verifier=${codeVerifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
-    append: true,
-  });
-  c.header('Set-Cookie', `auth_platform=${platform === 'mobile' ? 'mobile' : ''}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
     append: true,
   });
 
@@ -58,11 +63,9 @@ auth.get('/login', async (c) => {
   return c.redirect(loginUrl);
 });
 
-// GET /auth/callback - Handle Auth0 callback
+// GET /auth/callback - Handle Auth0 callback (web flow)
 auth.get('/callback', async (c) => {
   const authService = getAuthService(c);
-  const cookie = c.req.header('Cookie');
-  const authPlatform = cookie ? /auth_platform=([^;]+)/.exec(cookie)?.[1] : undefined;
 
   const code = c.req.query('code');
   const state = c.req.query('state');
@@ -72,34 +75,23 @@ auth.get('/callback', async (c) => {
   // Check for Auth0 error
   if (error) {
     console.error('Auth0 error:', error, errorDescription);
-    if (authPlatform === 'mobile') {
-      return c.redirect(`com.maronn.taskchute://callback?error=${encodeURIComponent(error)}`);
-    }
     return c.redirect('/?error=auth_failed');
   }
 
   if (!code) {
-    if (authPlatform === 'mobile') {
-      return c.redirect('com.maronn.taskchute://callback?error=no_code');
-    }
     return c.redirect('/?error=no_code');
   }
 
   // Verify state (CSRF protection)
+  const cookie = c.req.header('Cookie');
   const storedState = cookie?.match(/auth_state=([^;]+)/)?.[1];
   const codeVerifier = cookie?.match(/code_verifier=([^;]+)/)?.[1];
 
   if (!storedState || storedState !== state) {
-    if (authPlatform === 'mobile') {
-      return c.redirect('com.maronn.taskchute://callback?error=invalid_state');
-    }
     return c.redirect('/?error=invalid_state');
   }
 
   if (!codeVerifier) {
-    if (authPlatform === 'mobile') {
-      return c.redirect('com.maronn.taskchute://callback?error=missing_code_verifier');
-    }
     return c.redirect('/?error=missing_code_verifier');
   }
 
@@ -109,30 +101,59 @@ auth.get('/callback', async (c) => {
     // Set session cookie
     authService.setSessionCookie(c, session.id);
 
-    // Clear state, code_verifier, and platform cookies
+    // Clear state and code_verifier cookies
     c.header('Set-Cookie', 'auth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
       append: true,
     });
     c.header('Set-Cookie', 'code_verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
       append: true,
     });
-    c.header('Set-Cookie', 'auth_platform=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
-      append: true,
-    });
-
-    if (authPlatform === 'mobile') {
-      // For mobile: pass session ID directly via deep link
-      // The app will call /auth/exchange to set the cookie in the WebView context
-      return c.redirect(`com.maronn.taskchute://callback?session=${session.id}`);
-    }
 
     return c.redirect('/');
   } catch (err) {
     console.error('Callback error:', err);
-    if (authPlatform === 'mobile') {
-      return c.redirect('com.maronn.taskchute://callback?error=callback_failed');
-    }
     return c.redirect('/?error=callback_failed');
+  }
+});
+
+// POST /auth/token-login - Create server session from Auth0 access token (mobile flow)
+// After the mobile app authenticates via Auth0 SDK, it sends the access token here
+// to establish a server-side session cookie.
+auth.post('/token-login', async (c) => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+  const accessToken = typeof body.accessToken === 'string' ? body.accessToken.trim() : '';
+
+  if (!accessToken) {
+    return c.json({ error: { code: 'missing_token', message: 'Access token is required' } }, 400);
+  }
+
+  try {
+    // Validate token by fetching user info from Auth0
+    const userInfoResponse = await fetch(`https://${c.env.AUTH0_DOMAIN}/userinfo`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!userInfoResponse.ok) {
+      return c.json({ error: { code: 'invalid_token', message: 'Access token is invalid' } }, 401);
+    }
+
+    const userInfo: { sub: string; email: string; name: string } = await userInfoResponse.json();
+
+    // Upsert user and create session
+    const userRepo = new UserRepository(c.env.DB);
+    const sessionRepo = new SessionRepository(c.env.DB);
+    const user = await userRepo.upsertFromAuth0(userInfo.sub, userInfo.email, userInfo.name);
+    const session = await sessionRepo.create(user.id);
+
+    // Set session cookie
+    const authService = getAuthService(c);
+    authService.setSessionCookie(c, session.id);
+
+    return c.json({ data: { success: true } });
+  } catch (err) {
+    console.error('Token login error:', err);
+    return c.json({ error: { code: 'token_login_failed', message: 'Failed to create session' } }, 500);
   }
 });
 
@@ -152,28 +173,6 @@ auth.post('/logout', async (c) => {
   const logoutUrl = authService.getLogoutUrl(returnTo);
 
   return c.json({ logoutUrl });
-});
-
-// GET /auth/exchange - Set session cookie in WebView context (mobile flow)
-// The session ID is passed from the deep link after browser-based Auth0 login
-auth.get('/exchange', async (c) => {
-  const sessionId = c.req.query('session');
-
-  if (!sessionId) {
-    return c.json({ error: { code: 'missing_session', message: 'Session ID is required' } }, 400);
-  }
-
-  // Validate the session exists and is still valid
-  const authService = getAuthService(c);
-  const result = await authService.validateSession(sessionId);
-
-  if (!result) {
-    return c.json({ error: { code: 'invalid_session', message: 'Session is invalid or expired' } }, 401);
-  }
-
-  authService.setSessionCookie(c, sessionId);
-
-  return c.json({ data: { success: true } });
 });
 
 // GET /auth/me - Get current user info

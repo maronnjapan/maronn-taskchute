@@ -1,25 +1,33 @@
 import { useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
 import { isNativePlatform } from '../utils/capacitor';
+import { getAuth0Client, createServerSession } from '../services/auth0-native';
 import { authKeys } from './use-auth';
 
-async function setSessionCookie(sessionId: string): Promise<void> {
-  const response = await fetch(`/auth/exchange?session=${encodeURIComponent(sessionId)}`, {
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    throw new Error('Failed to set session');
-  }
+async function handleAuth0Callback(url: string): Promise<void> {
+  const client = await getAuth0Client();
+
+  // Let Auth0 SDK handle the callback (exchanges code for tokens via PKCE)
+  await client.handleRedirectCallback(url);
+
+  // Close the Custom Tab
+  await Browser.close();
+
+  // Get the access token and create a server session
+  const accessToken = await client.getTokenSilently();
+  await createServerSession(accessToken);
 }
 
 export function useDeepLink() {
   const queryClient = useQueryClient();
   const listenerAdded = useRef(false);
 
-  const exchangeMutation = useMutation({
-    mutationFn: setSessionCookie,
+  const callbackMutation = useMutation({
+    mutationFn: handleAuth0Callback,
     onSuccess: () => {
+      // Refresh auth state after server session is created
       void queryClient.invalidateQueries({ queryKey: authKeys.me() });
     },
   });
@@ -33,23 +41,12 @@ export function useDeepLink() {
     };
 
     void capacitorApp.addListener('appUrlOpen', (event) => {
-      const url = new URL(event.url);
-
-      if (url.host === 'callback') {
-        const sessionId = url.searchParams.get('session');
-        const error = url.searchParams.get('error');
-
-        if (error) {
-          console.error('Auth callback error:', error);
-          return;
-        }
-
-        if (sessionId) {
-          exchangeMutation.mutate(sessionId);
-        }
+      // Auth0 callback URLs contain 'state' and either 'code' or 'error'
+      if (event.url.includes('state') && (event.url.includes('code') || event.url.includes('error'))) {
+        callbackMutation.mutate(event.url);
       }
     });
-  }, [exchangeMutation]);
+  }, [callbackMutation]);
 
   return { initDeepLinkListener };
 }

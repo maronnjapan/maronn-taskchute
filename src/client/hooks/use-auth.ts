@@ -3,6 +3,7 @@ import { Browser } from '@capacitor/browser';
 import { authApi } from '../services/api-client';
 import { useAuthStore } from '../stores/auth-store';
 import { isNativePlatform } from '../utils/capacitor';
+import { getAuth0Client } from '../services/auth0-native';
 
 export const authKeys = {
   all: ['auth'] as const,
@@ -40,11 +41,15 @@ export function useAuth() {
 
   const login = async () => {
     if (isNativePlatform()) {
-      // On native: open login in system browser with mobile flag
-      // After Auth0 callback, server redirects to deep link → app handles it
-      const loginUrl = `${window.location.origin}/auth/login?platform=mobile`;
-      await Browser.open({ url: loginUrl });
+      // On mobile: use Auth0 SDK with Custom Tab (Chrome Custom Tabs on Android)
+      const client = await getAuth0Client();
+      await client.loginWithRedirect({
+        openUrl: async (url: string) => {
+          await Browser.open({ url });
+        },
+      });
     } else {
+      // On web: use server-side redirect flow
       window.location.href = authApi.getLoginUrl();
     }
   };
