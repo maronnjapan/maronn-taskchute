@@ -9,11 +9,13 @@ import { authKeys } from './use-auth';
 async function handleAuth0Callback(url: string): Promise<void> {
   const client = await getAuth0Client();
 
-  // Let Auth0 SDK handle the callback (exchanges code for tokens via PKCE)
-  await client.handleRedirectCallback(url);
-
-  // Close the Custom Tab
-  await Browser.close();
+  // Let Auth0 SDK handle the callback (exchanges code for tokens via PKCE).
+  // Close the Custom Tab even when callback handling throws (e.g. canceled/denied login).
+  try {
+    await client.handleRedirectCallback(url);
+  } finally {
+    await Browser.close();
+  }
 
   // Get the access token and create a server session
   const accessToken = await client.getTokenSilently();
