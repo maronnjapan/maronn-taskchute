@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Browser } from '@capacitor/browser';
 import { authApi } from '../services/api-client';
 import { useAuthStore } from '../stores/auth-store';
+import { isNativePlatform } from '../utils/capacitor';
 
 export const authKeys = {
   all: ['auth'] as const,
@@ -36,13 +38,22 @@ export function useAuth() {
     },
   });
 
+  const login = async () => {
+    if (isNativePlatform()) {
+      // On native: open login in system browser with mobile flag
+      // After Auth0 callback, server redirects to deep link → app handles it
+      const loginUrl = `${window.location.origin}/auth/login?platform=mobile`;
+      await Browser.open({ url: loginUrl });
+    } else {
+      window.location.href = authApi.getLoginUrl();
+    }
+  };
+
   return {
     user: meQuery.data,
     isLoading: meQuery.isLoading,
     isAuthenticated: Boolean(meQuery.data),
-    login: () => {
-      window.location.href = authApi.getLoginUrl();
-    },
+    login,
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
   };

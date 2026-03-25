@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { AuthService } from '../services/auth-service';
 import { UserRepository } from '../repositories/user-repository';
 import { SessionRepository } from '../repositories/session-repository';
+import { AuthCodeRepository } from '../repositories/auth-code-repository';
 import { generateId, generateCodeVerifier, generateCodeChallenge } from '../../shared/utils/index';
 import type { User } from '../../shared/types/index';
 
@@ -33,6 +34,10 @@ function getAuthService(c: { env: Bindings }) {
   });
 }
 
+function getAuthCodeRepo(c: { env: Bindings }) {
+  return new AuthCodeRepository(c.env.DB);
+}
+
 // GET /auth/login - Redirect to Auth0 login
 auth.get('/login', async (c) => {
   const authService = getAuthService(c);
@@ -42,11 +47,19 @@ auth.get('/login', async (c) => {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-  // Store state and code_verifier in cookies for CSRF protection and PKCE
+  // Detect mobile platform (passed as query param from Capacitor app)
+  const platform = c.req.query('platform') ?? '';
+
+  // Store state, code_verifier, and platform in cookies for CSRF protection and PKCE
   c.header('Set-Cookie', `auth_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
   c.header('Set-Cookie', `code_verifier=${codeVerifier}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
     append: true,
   });
+  if (platform === 'mobile') {
+    c.header('Set-Cookie', `auth_platform=mobile; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, {
+      append: true,
+    });
+  }
 
   const loginUrl = authService.getLoginUrl(state, codeChallenge);
   return c.redirect(loginUrl);
@@ -84,23 +97,39 @@ auth.get('/callback', async (c) => {
     return c.redirect('/?error=missing_code_verifier');
   }
 
+  // Check if this is a mobile auth flow
+  const authPlatform = cookie ? /auth_platform=([^;]+)/.exec(cookie)?.[1] : undefined;
+
   try {
     const { session } = await authService.handleCallback(code, codeVerifier);
 
     // Set session cookie
     authService.setSessionCookie(c, session.id);
 
-    // Clear state and code_verifier cookies
+    // Clear state, code_verifier, and platform cookies
     c.header('Set-Cookie', 'auth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
       append: true,
     });
     c.header('Set-Cookie', 'code_verifier=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
       append: true,
     });
+    c.header('Set-Cookie', 'auth_platform=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', {
+      append: true,
+    });
+
+    if (authPlatform === 'mobile') {
+      // For mobile: generate a one-time auth code and redirect to the app via deep link
+      const authCodeRepo = getAuthCodeRepo(c);
+      const authCode = await authCodeRepo.create(session.id);
+      return c.redirect(`com.maronn.taskchute://callback?code=${authCode}`);
+    }
 
     return c.redirect('/');
   } catch (err) {
     console.error('Callback error:', err);
+    if (authPlatform === 'mobile') {
+      return c.redirect('com.maronn.taskchute://callback?error=callback_failed');
+    }
     return c.redirect('/?error=callback_failed');
   }
 });
@@ -121,6 +150,27 @@ auth.post('/logout', async (c) => {
   const logoutUrl = authService.getLogoutUrl(returnTo);
 
   return c.json({ logoutUrl });
+});
+
+// GET /auth/exchange - Exchange a one-time auth code for a session cookie (mobile flow)
+auth.get('/exchange', async (c) => {
+  const code = c.req.query('code');
+
+  if (!code) {
+    return c.json({ error: { code: 'missing_code', message: 'Auth code is required' } }, 400);
+  }
+
+  const authCodeRepo = getAuthCodeRepo(c);
+  const sessionId = await authCodeRepo.exchange(code);
+
+  if (!sessionId) {
+    return c.json({ error: { code: 'invalid_code', message: 'Auth code is invalid or expired' } }, 401);
+  }
+
+  const authService = getAuthService(c);
+  authService.setSessionCookie(c, sessionId);
+
+  return c.json({ data: { success: true } });
 });
 
 // GET /auth/me - Get current user info
