@@ -16,3 +16,11 @@ dist
 .cloudflare-config.json
 .auth0-config.json
 
+# Android build outputs
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+*.keystore
+
