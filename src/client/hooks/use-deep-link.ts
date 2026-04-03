@@ -1,13 +1,20 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSyncExternalStore } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { isNativePlatform } from '../utils/capacitor';
 import { getAuth0Client, createServerSession } from '../services/auth0-native';
 import { authKeys } from './use-auth';
 
-// Module-level flag: persists across component remounts (e.g. React Strict Mode
-// intentional unmount/remount in development), ensuring the listener is registered only once.
+// Module-level URL store: Capacitor listener pushes URLs here,
+// useSyncExternalStore reads from here (outside React render).
+let pendingUrl: string | null = null;
+const urlStoreListeners = new Set<() => void>();
 let listenerAdded = false;
+
+function notifyUrlStore() {
+  urlStoreListeners.forEach((l) => l());
+}
 
 function isAuth0CallbackUrl(url: string): boolean {
   return url.includes('state') && (url.includes('code') || url.includes('error'));
@@ -29,33 +36,68 @@ async function handleAuth0Callback(url: string): Promise<void> {
   await createServerSession(accessToken);
 }
 
+// Stable module-level subscribe: registers the Capacitor listener in the
+// subscribe callback, which runs after commit (outside render), making it safe.
+function subscribeToDeepLinkUrl(onStoreChange: () => void) {
+  urlStoreListeners.add(onStoreChange);
+
+  if (!listenerAdded && isNativePlatform()) {
+    listenerAdded = true;
+
+    void (async () => {
+      // Cold-start: handle the case where the OS relaunched the app via a deep link
+      const launchUrl = await App.getLaunchUrl();
+      if (launchUrl?.url && isAuth0CallbackUrl(launchUrl.url)) {
+        pendingUrl = launchUrl.url;
+        notifyUrlStore();
+      }
+
+      void App.addListener('appUrlOpen', (event: { url: string }) => {
+        if (isAuth0CallbackUrl(event.url)) {
+          pendingUrl = event.url;
+          notifyUrlStore();
+        }
+      });
+    })();
+  }
+
+  return () => {
+    urlStoreListeners.delete(onStoreChange);
+  };
+}
+
+function getUrlSnapshot() {
+  return pendingUrl;
+}
+
 export function useDeepLink() {
   const queryClient = useQueryClient();
 
-  const callbackMutation = useMutation({
-    mutationFn: handleAuth0Callback,
-    onSuccess: () => {
+  // Subscribes to the module-level URL store. When Capacitor fires a deep link,
+  // pendingUrl is set and React re-renders with the new URL.
+  const url = useSyncExternalStore(subscribeToDeepLinkUrl, getUrlSnapshot, getUrlSnapshot);
+
+  // Process the deep link URL via useQuery. Using useQuery (not useMutation) because
+  // the URL serves as a stable query key that deduplicates processing automatically.
+  useQuery({
+    queryKey: ['deep-link-callback', url],
+    queryFn: async () => {
+      if (!url) return null;
+
+      await handleAuth0Callback(url);
+
+      // Clear processed URL from the store
+      pendingUrl = null;
+      notifyUrlStore();
+
       // Refresh auth state after server session is created
-      void queryClient.invalidateQueries({ queryKey: authKeys.me() });
+      await queryClient.invalidateQueries({ queryKey: authKeys.me() });
+
+      return url;
     },
+    enabled: url !== null,
+    staleTime: Infinity,
+    gcTime: 5_000,
+    retry: false,
   });
-
-  async function initDeepLinkListener() {
-    if (!isNativePlatform() || listenerAdded) return;
-    listenerAdded = true;
-
-    // Cold-start: handle the case where the OS relaunched the app via a deep link
-    const launchUrl = await App.getLaunchUrl();
-    if (launchUrl?.url && isAuth0CallbackUrl(launchUrl.url)) {
-      callbackMutation.mutate(launchUrl.url);
-    }
-
-    void App.addListener('appUrlOpen', (event: { url: string }) => {
-      if (isAuth0CallbackUrl(event.url)) {
-        callbackMutation.mutate(event.url);
-      }
-    });
-  }
-
-  return { initDeepLinkListener };
 }
