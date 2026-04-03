@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Browser } from '@capacitor/browser';
 import { authApi } from '../services/api-client';
 import { useAuthStore } from '../stores/auth-store';
+import { isNativePlatform } from '../utils/capacitor';
+import { getAuth0Client } from '../services/auth0-native';
 
 export const authKeys = {
   all: ['auth'] as const,
@@ -36,13 +39,26 @@ export function useAuth() {
     },
   });
 
+  const login = async () => {
+    if (isNativePlatform()) {
+      // On mobile: use Auth0 SDK with Custom Tab (Chrome Custom Tabs on Android)
+      const client = await getAuth0Client();
+      await client.loginWithRedirect({
+        openUrl: async (url: string) => {
+          await Browser.open({ url });
+        },
+      });
+    } else {
+      // On web: use server-side redirect flow
+      window.location.href = authApi.getLoginUrl();
+    }
+  };
+
   return {
     user: meQuery.data,
     isLoading: meQuery.isLoading,
     isAuthenticated: Boolean(meQuery.data),
-    login: () => {
-      window.location.href = authApi.getLoginUrl();
-    },
+    login,
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
   };
