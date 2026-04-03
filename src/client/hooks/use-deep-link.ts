@@ -1,10 +1,17 @@
-import { useRef, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { isNativePlatform } from '../utils/capacitor';
 import { getAuth0Client, createServerSession } from '../services/auth0-native';
 import { authKeys } from './use-auth';
+
+// Module-level flag: persists across component remounts (e.g. React Strict Mode
+// intentional unmount/remount in development), ensuring the listener is registered only once.
+let listenerAdded = false;
+
+function isAuth0CallbackUrl(url: string): boolean {
+  return url.includes('state') && (url.includes('code') || url.includes('error'));
+}
 
 async function handleAuth0Callback(url: string): Promise<void> {
   const client = await getAuth0Client();
@@ -24,7 +31,6 @@ async function handleAuth0Callback(url: string): Promise<void> {
 
 export function useDeepLink() {
   const queryClient = useQueryClient();
-  const listenerAdded = useRef(false);
 
   const callbackMutation = useMutation({
     mutationFn: handleAuth0Callback,
@@ -34,21 +40,22 @@ export function useDeepLink() {
     },
   });
 
-  const initDeepLinkListener = useCallback(() => {
-    if (!isNativePlatform() || listenerAdded.current) return;
-    listenerAdded.current = true;
+  async function initDeepLinkListener() {
+    if (!isNativePlatform() || listenerAdded) return;
+    listenerAdded = true;
 
-    const capacitorApp = App as unknown as {
-      addListener: (eventName: 'appUrlOpen', listenerFunc: (event: { url: string }) => void) => Promise<void>;
-    };
+    // Cold-start: handle the case where the OS relaunched the app via a deep link
+    const launchUrl = await App.getLaunchUrl();
+    if (launchUrl?.url && isAuth0CallbackUrl(launchUrl.url)) {
+      callbackMutation.mutate(launchUrl.url);
+    }
 
-    void capacitorApp.addListener('appUrlOpen', (event) => {
-      // Auth0 callback URLs contain 'state' and either 'code' or 'error'
-      if (event.url.includes('state') && (event.url.includes('code') || event.url.includes('error'))) {
+    void App.addListener('appUrlOpen', (event: { url: string }) => {
+      if (isAuth0CallbackUrl(event.url)) {
         callbackMutation.mutate(event.url);
       }
     });
-  }, [callbackMutation]);
+  }
 
   return { initDeepLinkListener };
 }

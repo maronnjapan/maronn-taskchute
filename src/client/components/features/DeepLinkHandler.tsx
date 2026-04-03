@@ -7,11 +7,11 @@ import { useDeepLink } from '../../hooks/use-deep-link';
  */
 export function DeepLinkHandler() {
   const { initDeepLinkListener } = useDeepLink();
-  const initialized = useRef<boolean | null>(null);
+  const initialized = useRef(false);
 
-  if (initialized.current == null) {
+  if (!initialized.current) {
     initialized.current = true;
-    initDeepLinkListener();
+    void initDeepLinkListener();
   }
 
   return null;
