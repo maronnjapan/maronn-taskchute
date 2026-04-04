@@ -1,4 +1,5 @@
 import { generateCodeVerifier, generateCodeChallenge, generateId } from '../../shared/utils/index';
+import { isNativePlatform } from '../utils/capacitor';
 
 interface Auth0Config {
   domain: string;
@@ -10,10 +11,56 @@ interface PkceState {
   codeVerifier: string;
   state: string;
   redirectUri: string;
+  expiresAt: number;
 }
 
 const PKCE_STORAGE_KEY = 'auth0_mobile_pkce';
+const PKCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 let configCache: Auth0Config | null = null;
+
+/**
+ * Secure storage abstraction for PKCE state.
+ * - Native (iOS/Android): Keychain / Keystore via capacitor-secure-storage-plugin
+ * - Web: localStorage (PKCE state is temporary; web uses a different auth flow)
+ */
+const pkceStorage = {
+  async set(value: string): Promise<void> {
+    if (isNativePlatform()) {
+      const { SecureStoragePlugin } = await import('capacitor-secure-storage-plugin');
+      await SecureStoragePlugin.set({ key: PKCE_STORAGE_KEY, value });
+    } else {
+      localStorage.setItem(PKCE_STORAGE_KEY, value);
+    }
+  },
+
+  async get(): Promise<string | null> {
+    if (isNativePlatform()) {
+      try {
+        const { SecureStoragePlugin } = await import('capacitor-secure-storage-plugin');
+        const result = await SecureStoragePlugin.get({ key: PKCE_STORAGE_KEY });
+        return result.value;
+      } catch {
+        // SecureStoragePlugin.get throws when key is not found
+        return null;
+      }
+    } else {
+      return localStorage.getItem(PKCE_STORAGE_KEY);
+    }
+  },
+
+  async remove(): Promise<void> {
+    if (isNativePlatform()) {
+      try {
+        const { SecureStoragePlugin } = await import('capacitor-secure-storage-plugin');
+        await SecureStoragePlugin.remove({ key: PKCE_STORAGE_KEY });
+      } catch {
+        // ignore — key may already be absent
+      }
+    } else {
+      localStorage.removeItem(PKCE_STORAGE_KEY);
+    }
+  },
+};
 
 export async function getAuth0Config(): Promise<Auth0Config> {
   if (configCache) return configCache;
@@ -41,8 +88,8 @@ export async function getAuth0Config(): Promise<Auth0Config> {
 
 /**
  * Build the Auth0 authorization URL for the mobile PKCE flow.
- * Stores the PKCE state (code_verifier + state) in localStorage so it
- * survives the app being backgrounded while the Custom Tab is open.
+ * Stores the PKCE state (code_verifier + state) in iOS Keychain / Android Keystore
+ * so it survives the WebView process being killed while the Custom Tab is open.
  */
 export async function buildLoginUrl(): Promise<string> {
   const config = await getAuth0Config();
@@ -52,8 +99,16 @@ export async function buildLoginUrl(): Promise<string> {
   const state = generateId();
   const redirectUri = `com.maronn.taskchute://${config.domain}/capacitor/com.maronn.taskchute/callback`;
 
-  const pkceState: PkceState = { codeVerifier, state, redirectUri };
-  sessionStorage.setItem(PKCE_STORAGE_KEY, JSON.stringify(pkceState));
+  // Clear any stale PKCE state from a previously abandoned login attempt
+  await pkceStorage.remove();
+
+  const pkceState: PkceState = {
+    codeVerifier,
+    state,
+    redirectUri,
+    expiresAt: Date.now() + PKCE_TTL_MS,
+  };
+  await pkceStorage.set(JSON.stringify(pkceState));
 
   const params = new URLSearchParams({
     response_type: 'code',
@@ -82,8 +137,8 @@ export async function exchangeCodeForToken(callbackUrl: string): Promise<string>
   const error = parsedUrl.searchParams.get('error');
 
   // Always clean up stored PKCE state
-  const pkceStateJson = sessionStorage.getItem(PKCE_STORAGE_KEY);
-  sessionStorage.removeItem(PKCE_STORAGE_KEY);
+  const pkceStateJson = await pkceStorage.get();
+  await pkceStorage.remove();
 
   if (error) {
     throw new Error(`Auth0 error: ${error}`);
@@ -98,6 +153,10 @@ export async function exchangeCodeForToken(callbackUrl: string): Promise<string>
   }
 
   const pkceState = JSON.parse(pkceStateJson) as PkceState;
+
+  if (Date.now() > pkceState.expiresAt) {
+    throw new Error('PKCE state expired — please try logging in again');
+  }
 
   if (pkceState.state !== state) {
     throw new Error('State mismatch');
