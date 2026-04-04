@@ -18,6 +18,18 @@ let configCache: Auth0Config | null = null;
 export async function getAuth0Config(): Promise<Auth0Config> {
   if (configCache) return configCache;
 
+  // Prefer build-time env vars so the mobile APK works without server connectivity.
+  // VITE_AUTH0_* are public values (domain, clientId, audience) — safe to bundle.
+  const domain = import.meta.env.VITE_AUTH0_DOMAIN;
+  const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
+  const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
+
+  if (domain && clientId && audience) {
+    configCache = { domain, clientId, audience };
+    return configCache;
+  }
+
+  // Fall back to server fetch (e.g. local dev without env vars set)
   const response = await fetch('/auth/config', { credentials: 'include' });
   if (!response.ok) {
     throw new Error('Failed to fetch Auth0 config');

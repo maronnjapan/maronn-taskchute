@@ -20,6 +20,7 @@
     "setup:cloudflare": "bash scripts/setup-cloudflare.sh",
     "setup:auth0": "bash scripts/setup-auth0.sh",
     "push:secrets": "bash scripts/push-secrets.sh",
+    "setup:github-vars": "bash scripts/setup-github-vars.sh",
     "db:migrate:remote": "wrangler d1 migrations apply taskchute-db --remote",
     "cap:sync": "pnpm run build && npx cap sync android"
   },

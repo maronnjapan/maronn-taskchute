@@ -42,29 +42,15 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: async () => {
       if (isNativePlatform()) {
-        alert('[DEBUG] Step 1: isNativePlatform = true');
-        let loginUrl: string;
-        try {
-          loginUrl = await buildLoginUrl();
-        } catch (e) {
-          alert('[DEBUG] Step 2 FAILED (buildLoginUrl): ' + String(e));
-          throw e;
-        }
-        alert('[DEBUG] Step 2 OK: URL先頭=' + loginUrl.slice(0, 60));
-        try {
-          await Browser.open({ url: loginUrl });
-        } catch (e) {
-          alert('[DEBUG] Step 3 FAILED (Browser.open): ' + String(e));
-          throw e;
-        }
-        alert('[DEBUG] Step 3 OK: Browser.open完了');
+        // On mobile: build Auth0 PKCE URL directly and open in Chrome Custom Tab.
+        // Auth0 redirects back via deep link (com.maronn.taskchute://) which is
+        // handled by DeepLinkHandler → useDeepLink → exchangeCodeForToken.
+        const loginUrl = await buildLoginUrl();
+        await Browser.open({ url: loginUrl });
       } else {
-        alert('[DEBUG] isNativePlatform = false → web フロー');
+        // On web: use server-side redirect flow
         window.location.href = authApi.getLoginUrl();
       }
-    },
-    onError: (e) => {
-      alert('[DEBUG] loginMutation onError: ' + String(e));
     },
   });
 
