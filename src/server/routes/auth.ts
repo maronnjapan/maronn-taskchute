@@ -12,6 +12,7 @@ interface Bindings {
   AUTH0_CLIENT_SECRET: string;
   AUTH0_CALLBACK_URL: string;
   AUTH0_AUDIENCE: string;
+  AUTH0_NATIVE_CLIENT_ID: string;
 }
 
 interface Variables {
@@ -60,11 +61,11 @@ function isTokenBoundToApp(payload: JwtPayload, env: Bindings): boolean {
   }
 
   // Auth0 can encode the client binding as `azp` or `client_id` (RFC 9068 profile).
-  // Accept either claim and enforce that it matches this application's Auth0 client ID.
+  // Accept either claim and enforce that it matches the web app or native app's Auth0 client ID.
   const boundClientId =
     typeof azp === 'string' ? azp : typeof clientIdClaim === 'string' ? clientIdClaim : null;
 
-  return boundClientId === env.AUTH0_CLIENT_ID;
+  return boundClientId === env.AUTH0_CLIENT_ID || boundClientId === env.AUTH0_NATIVE_CLIENT_ID;
 }
 
 function getAuthService(c: { env: Bindings }) {
@@ -80,11 +81,12 @@ function getAuthService(c: { env: Bindings }) {
 }
 
 // GET /auth/config - Return public Auth0 config for mobile SDK initialization
+// Returns the Native App client ID (PKCE, no client secret) for use in the mobile app.
 auth.get('/config', (c) => {
   return c.json({
     data: {
       domain: c.env.AUTH0_DOMAIN,
-      clientId: c.env.AUTH0_CLIENT_ID,
+      clientId: c.env.AUTH0_NATIVE_CLIENT_ID,
       audience: c.env.AUTH0_AUDIENCE,
     },
   });

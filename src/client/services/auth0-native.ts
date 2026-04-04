@@ -68,7 +68,7 @@ export async function getAuth0Config(): Promise<Auth0Config> {
   // Prefer build-time env vars so the mobile APK works without server connectivity.
   // VITE_AUTH0_* are public values (domain, clientId, audience) — safe to bundle.
   const domain = import.meta.env.VITE_AUTH0_DOMAIN;
-  const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
+  const clientId = import.meta.env.VITE_AUTH0_NATIVE_CLIENT_ID;
   const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
 
   if (domain && clientId && audience) {

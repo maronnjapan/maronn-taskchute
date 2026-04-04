@@ -33,7 +33,7 @@ jobs:
         run: pnpm run build
         env:
           VITE_AUTH0_DOMAIN: ${{ vars.VITE_AUTH0_DOMAIN }}
-          VITE_AUTH0_CLIENT_ID: ${{ vars.VITE_AUTH0_CLIENT_ID }}
+          VITE_AUTH0_NATIVE_CLIENT_ID: ${{ vars.VITE_AUTH0_NATIVE_CLIENT_ID }}
           VITE_AUTH0_AUDIENCE: ${{ vars.VITE_AUTH0_AUDIENCE }}
 
       - name: Sync Capacitor
