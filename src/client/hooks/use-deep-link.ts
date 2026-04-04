@@ -21,12 +21,17 @@ function isAuth0CallbackUrl(url: string): boolean {
 }
 
 async function handleAuth0Callback(url: string): Promise<void> {
-  // Exchange the authorization code for an access token (PKCE flow).
-  // Close the Custom Tab regardless of success or failure.
-  const accessToken = await exchangeCodeForToken(url).finally(() => Browser.close());
-
-  // Create a server-side session using the access token
-  await createServerSession(accessToken);
+  try {
+    // Exchange the authorization code for an access token (PKCE flow).
+    const accessToken = await exchangeCodeForToken(url);
+    // Create a server-side session using the access token.
+    await createServerSession(accessToken);
+  } finally {
+    // Close the Custom Tab regardless of success or failure.
+    // Ignore errors (e.g., the Custom Tab may have already closed itself when
+    // Android routed the custom-scheme deep link back to the app).
+    await Browser.close().catch(() => {});
+  }
 }
 
 // Stable module-level subscribe: registers the Capacitor listener in the
@@ -72,7 +77,7 @@ export function useDeepLink() {
 
   // Process the deep link URL via useQuery. Using useQuery (not useMutation) because
   // the URL serves as a stable query key that deduplicates processing automatically.
-  useQuery({
+  const { error } = useQuery({
     queryKey: ['deep-link-callback', url],
     queryFn: async () => {
       if (!url) return null;
@@ -93,4 +98,6 @@ export function useDeepLink() {
     gcTime: 5_000,
     retry: false,
   });
+
+  return { callbackError: error };
 }
