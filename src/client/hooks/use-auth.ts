@@ -3,7 +3,7 @@ import { Browser } from '@capacitor/browser';
 import { authApi } from '../services/api-client';
 import { useAuthStore } from '../stores/auth-store';
 import { isNativePlatform } from '../utils/capacitor';
-import { getAuth0Client } from '../services/auth0-native';
+import { buildLoginUrl } from '../services/auth0-native';
 
 export const authKeys = {
   all: ['auth'] as const,
@@ -41,13 +41,11 @@ export function useAuth() {
 
   const login = async () => {
     if (isNativePlatform()) {
-      // On mobile: use Auth0 SDK with Custom Tab (Chrome Custom Tabs on Android)
-      const client = await getAuth0Client();
-      await client.loginWithRedirect({
-        openUrl: async (url: string) => {
-          await Browser.open({ url });
-        },
-      });
+      // On mobile: build Auth0 PKCE URL directly and open in Chrome Custom Tab.
+      // Auth0 redirects back via deep link (com.maronn.taskchute://) which is
+      // handled by DeepLinkHandler → useDeepLink → exchangeCodeForToken.
+      const loginUrl = await buildLoginUrl();
+      await Browser.open({ url: loginUrl });
     } else {
       // On web: use server-side redirect flow
       window.location.href = authApi.getLoginUrl();
