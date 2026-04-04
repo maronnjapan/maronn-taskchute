@@ -22,7 +22,7 @@ import type { Task, TimeEntry } from '../../shared/types/index';
 import type { CreateTaskInput, UpdateTaskInput } from '../../shared/validators/index';
 
 export function TaskListPage() {
-  const { isAuthenticated, isLoading: isAuthLoading, login } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, login, isLoggingIn, loginError } = useAuth();
   const { workspaces, create: createWorkspace, isCreating: isCreatingWorkspace } = useWorkspaces();
   const { currentWorkspaceId, setCurrentWorkspaceId } = useWorkspaceStore();
   const { selectedDate, updateTask: updateTaskInStore } = useTaskStore();
@@ -238,7 +238,12 @@ export function TaskListPage() {
           <br />
           ログインして始めましょう。
         </p>
-        <Button size="lg" onClick={login}>
+        {loginError && (
+          <p className="text-red-600 text-sm mb-4">
+            ログインに失敗しました: {loginError instanceof Error ? loginError.message : String(loginError)}
+          </p>
+        )}
+        <Button size="lg" onClick={login} isLoading={isLoggingIn} disabled={isLoggingIn}>
           ログインして始める
         </Button>
       </div>
