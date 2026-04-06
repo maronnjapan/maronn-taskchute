@@ -35,10 +35,12 @@ export const authApi = {
     return result.data;
   },
 
-  async logout(): Promise<{ logoutUrl: string }> {
+  async logout(isMobile = false): Promise<{ logoutUrl: string }> {
     const response = await fetch(`${BASE_URL}/auth/logout`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      body: JSON.stringify({ isMobile }),
     });
     return handleResponse<{ logoutUrl: string }>(response);
   },

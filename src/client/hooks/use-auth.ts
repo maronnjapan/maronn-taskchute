@@ -29,13 +29,20 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
-      const { logoutUrl } = await authApi.logout();
+      const { logoutUrl } = await authApi.logout(isNativePlatform());
       return logoutUrl;
     },
     onSuccess: (logoutUrl) => {
       setUser(null);
       queryClient.clear();
-      window.location.href = logoutUrl;
+      if (isNativePlatform()) {
+        // On mobile: open Auth0 logout in a Custom Tab.
+        // Auth0 redirects to com.maronn.taskchute:// which brings the app
+        // back to the foreground (already showing login since state is cleared).
+        void Browser.open({ url: logoutUrl });
+      } else {
+        window.location.href = logoutUrl;
+      }
     },
   });
 

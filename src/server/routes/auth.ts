@@ -287,6 +287,7 @@ auth.post('/mobile-token', async (c) => {
 });
 
 // POST /auth/logout - Logout user
+// Accepts optional body: { isMobile: true } to get a native-app-friendly logout URL.
 auth.post('/logout', async (c) => {
   const authService = getAuthService(c);
   const sessionId = authService.getSessionIdFromCookie(c);
@@ -297,9 +298,26 @@ auth.post('/logout', async (c) => {
 
   authService.clearSessionCookie(c);
 
-  // Get return URL from request or default to home
-  const returnTo = new URL(c.req.url).origin;
-  const logoutUrl = authService.getLogoutUrl(returnTo);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+  const isMobile = body.isMobile === true;
+
+  let logoutUrl: string;
+  if (isMobile) {
+    // Mobile logout: use the native client ID and the app's custom scheme as returnTo
+    // so Auth0 redirects back into the app instead of to a web URL.
+    // The returnTo value must be listed in the Auth0 native application's
+    // "Allowed Logout URLs" (e.g. com.maronn.taskchute://).
+    const nativeClientId = c.env.AUTH0_NATIVE_CLIENT_ID || c.env.AUTH0_CLIENT_ID;
+    const params = new URLSearchParams({
+      client_id: nativeClientId,
+      returnTo: 'com.maronn.taskchute://',
+    });
+    logoutUrl = `https://${c.env.AUTH0_DOMAIN}/v2/logout?${params.toString()}`;
+  } else {
+    const returnTo = new URL(c.req.url).origin;
+    logoutUrl = authService.getLogoutUrl(returnTo);
+  }
 
   return c.json({ logoutUrl });
 });
