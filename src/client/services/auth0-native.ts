@@ -125,12 +125,14 @@ export async function buildLoginUrl(): Promise<string> {
 }
 
 /**
- * Handle the Auth0 callback URL: validate state, exchange the authorization
- * code for an access token using PKCE, and return the access token.
+ * Handle the Auth0 callback URL: validate state, proxy the code exchange to the
+ * server (avoiding WebView CORS), and establish a server-side session cookie.
+ *
+ * The token exchange is performed server-side via POST /auth/mobile-token so that
+ * the Cloudflare Worker — not the WebView — calls Auth0's /oauth/token endpoint.
+ * This eliminates the CORS restriction that blocks the direct WebView → Auth0 call.
  */
-export async function exchangeCodeForToken(callbackUrl: string): Promise<string> {
-  const config = await getAuth0Config();
-
+export async function completeMobileLogin(callbackUrl: string): Promise<void> {
   const parsedUrl = new URL(callbackUrl);
   const code = parsedUrl.searchParams.get('code');
   const state = parsedUrl.searchParams.get('state');
@@ -162,35 +164,20 @@ export async function exchangeCodeForToken(callbackUrl: string): Promise<string>
     throw new Error('State mismatch');
   }
 
-  const tokenResponse = await fetch(`https://${config.domain}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: config.clientId,
-      code,
-      redirect_uri: pkceState.redirectUri,
-      code_verifier: pkceState.codeVerifier,
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    const errorBody = await tokenResponse.text();
-    throw new Error(`Token exchange failed: ${errorBody}`);
-  }
-
-  const tokenData = (await tokenResponse.json()) as { access_token: string };
-  return tokenData.access_token;
-}
-
-export async function createServerSession(accessToken: string): Promise<void> {
-  const response = await fetch('/auth/token-login', {
+  // Proxy the token exchange through the server. The server constructs the
+  // redirect_uri itself, so we only send the one-time code and the verifier.
+  const response = await fetch('/auth/mobile-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ accessToken }),
+    body: JSON.stringify({
+      code,
+      codeVerifier: pkceState.codeVerifier,
+    }),
   });
+
   if (!response.ok) {
-    throw new Error('Failed to create server session');
+    const errorBody = await response.text();
+    throw new Error(`Mobile login failed: ${errorBody}`);
   }
 }

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { isNativePlatform } from '../utils/capacitor';
-import { exchangeCodeForToken, createServerSession } from '../services/auth0-native';
+import { completeMobileLogin } from '../services/auth0-native';
 import { authKeys } from './use-auth';
 
 // Module-level URL store: Capacitor listener pushes URLs here,
@@ -22,10 +22,8 @@ function isAuth0CallbackUrl(url: string): boolean {
 
 async function handleAuth0Callback(url: string): Promise<void> {
   try {
-    // Exchange the authorization code for an access token (PKCE flow).
-    const accessToken = await exchangeCodeForToken(url);
-    // Create a server-side session using the access token.
-    await createServerSession(accessToken);
+    // Validate PKCE state, exchange the auth code via the server, and create a session.
+    await completeMobileLogin(url);
   } finally {
     // Close the Custom Tab regardless of success or failure.
     // Ignore errors (e.g., the Custom Tab may have already closed itself when

@@ -214,6 +214,78 @@ auth.post('/token-login', async (c) => {
   }
 });
 
+// POST /auth/mobile-token - Mobile PKCE code exchange and session creation
+// The mobile app sends the authorization code and PKCE code_verifier.
+// The server proxies the token exchange to Auth0 (no WebView CORS restriction)
+// and creates a server-side session cookie in a single round trip.
+auth.post('/mobile-token', async (c) => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+  const code = typeof body.code === 'string' ? body.code.trim() : '';
+  const codeVerifier = typeof body.codeVerifier === 'string' ? body.codeVerifier.trim() : '';
+
+  if (!code || !codeVerifier) {
+    return c.json({ error: { code: 'missing_params', message: 'code and codeVerifier are required' } }, 400);
+  }
+
+  const nativeClientId = c.env.AUTH0_NATIVE_CLIENT_ID;
+  if (!nativeClientId) {
+    return c.json({ error: { code: 'config_error', message: 'Native client is not configured on server' } }, 500);
+  }
+
+  // Construct the redirect URI on the server to avoid trusting client-provided values.
+  // This must exactly match what buildLoginUrl() sends to Auth0 during authorization.
+  const redirectUri = `com.maronn.taskchute://${c.env.AUTH0_DOMAIN}/capacitor/com.maronn.taskchute/callback`;
+
+  try {
+    // Exchange the authorization code for an access token (server-to-Auth0, no CORS)
+    const tokenResponse = await fetch(`https://${c.env.AUTH0_DOMAIN}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: nativeClientId,
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: codeVerifier,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorBody = await tokenResponse.text();
+      console.error('Auth0 mobile token exchange failed:', errorBody);
+      return c.json({ error: { code: 'token_exchange_failed', message: 'Token exchange with Auth0 failed' } }, 401);
+    }
+
+    const tokenData: { access_token: string } = await tokenResponse.json();
+
+    // Validate the access token and fetch user profile
+    const userInfoResponse = await fetch(`https://${c.env.AUTH0_DOMAIN}/userinfo`, {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userInfoResponse.ok) {
+      return c.json({ error: { code: 'invalid_token', message: 'Access token validation failed' } }, 401);
+    }
+
+    const userInfo: { sub: string; email: string; name: string } = await userInfoResponse.json();
+
+    // Upsert user and create session
+    const userRepo = new UserRepository(c.env.DB);
+    const sessionRepo = new SessionRepository(c.env.DB);
+    const user = await userRepo.upsertFromAuth0(userInfo.sub, userInfo.email, userInfo.name);
+    const session = await sessionRepo.create(user.id);
+
+    const authService = getAuthService(c);
+    authService.setSessionCookie(c, session.id);
+
+    return c.json({ data: { success: true } });
+  } catch (err) {
+    console.error('Mobile token exchange error:', err);
+    return c.json({ error: { code: 'mobile_token_failed', message: 'Failed to process mobile authentication' } }, 500);
+  }
+});
+
 // POST /auth/logout - Logout user
 auth.post('/logout', async (c) => {
   const authService = getAuthService(c);

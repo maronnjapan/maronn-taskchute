@@ -44,7 +44,7 @@ export function useAuth() {
       if (isNativePlatform()) {
         // On mobile: build Auth0 PKCE URL directly and open in Chrome Custom Tab.
         // Auth0 redirects back via deep link (com.maronn.taskchute://) which is
-        // handled by DeepLinkHandler → useDeepLink → exchangeCodeForToken.
+        // handled by DeepLinkHandler → useDeepLink → completeMobileLogin.
         const loginUrl = await buildLoginUrl();
         await Browser.open({ url: loginUrl });
       } else {
